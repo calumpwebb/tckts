@@ -6,7 +6,8 @@ A minimal, plain-text ticket tracker for the command line. No databases, no JSON
 
 - **Plain text storage** - Files are readable and editable by hand
 - **Multi-project support** - Organize tickets by project prefix (e.g., BACKEND-1, UI-23)
-- **Ticket types** - Categorize as bug, feature, task, or chore
+- **Ticket types** - Categorize as bug, feature, task, chore, or epic
+- **Status workflow** - pending → in_progress → done with timestamps
 - **Dependencies** - Define which tickets block others
 - **Zero dependencies** - Built with Zig stdlib only
 
@@ -16,9 +17,6 @@ Requires [Zig 0.15](https://ziglang.org/download/) or later.
 
 ```bash
 # Build
-zig build
-
-# Install to zig-out/bin/
 zig build
 
 # Or build optimized release
@@ -34,15 +32,18 @@ The binary will be at `zig-out/bin/tckts`.
 tckts init MYPROJECT
 
 # Add some tickets
-tckts add MYPROJECT feature "User authentication" "Implement login flow"
-tckts add MYPROJECT bug "Fix crash on startup" ""
-tckts add MYPROJECT task "Write tests" "" --depends MYPROJECT-1
+tckts add "User authentication" -p MYPROJECT -t feature
+tckts add "Fix crash on startup" -p MYPROJECT -t bug
+tckts add "Write tests" -p MYPROJECT -t task -d MYPROJECT-1
 
 # List tickets
 tckts list MYPROJECT
 
 # Show ticket details
 tckts show MYPROJECT-1
+
+# Start working on a ticket
+tckts start MYPROJECT-1
 
 # Complete a ticket
 tckts done MYPROJECT-2
@@ -68,29 +69,30 @@ Creates `.tckts/<PREFIX>.tckts` file.
 Create a new ticket.
 
 ```bash
-tckts add <PREFIX> <type> <title> <description> [options]
+tckts add <title> [options]
 ```
 
-**Types:** `bug`, `feature`, `task`, `chore`
-
 **Options:**
-- `--depends <ID>` - Add dependency (can be repeated)
+- `-p, --project <PREFIX>` - Project prefix (default: MAIN)
+- `-t, --type <TYPE>` - Ticket type: bug, feature, task, chore, epic
+- `-d, --depends <IDs>` - Comma-separated dependency IDs
+- `-m, --message <DESC>` - Ticket description
 - `--priority <low|medium|high>` - Set priority
 
 **Examples:**
 
 ```bash
 # Simple ticket
-tckts add API feature "Add pagination" "Support page and limit params"
+tckts add "Add pagination" -p API -t feature -m "Support page and limit params"
 
 # Bug with high priority
-tckts add API bug "Memory leak" "In connection pool" --priority high
+tckts add "Memory leak" -p API -t bug --priority high
 
 # Task that depends on another ticket
-tckts add API task "Update docs" "" --depends API-1
+tckts add "Update docs" -p API -t task -d API-1
 
-# Feature with multiple dependencies
-tckts add API feature "New endpoint" "" --depends API-1 --depends API-2
+# Epic with multiple dependencies
+tckts add "New module" -p API -t epic -d "API-1, API-2"
 ```
 
 ### list
@@ -98,10 +100,10 @@ tckts add API feature "New endpoint" "" --depends API-1 --depends API-2
 List tickets in a project.
 
 ```bash
-tckts list <PREFIX> [--all | --done]
+tckts list [PREFIX] [--all | --pending | --blocked]
 ```
 
-By default shows only pending tickets. Use `--all` to show all tickets or `--done` to show only completed tickets.
+By default shows only pending tickets. Use `--all` to show all tickets.
 
 ### show
 
@@ -111,11 +113,15 @@ Display full details of a ticket.
 tckts show <TICKET-ID>
 ```
 
-Example:
+### start
+
+Mark a ticket as in-progress.
 
 ```bash
-tckts show API-1
+tckts start <TICKET-ID>
 ```
+
+Records the `started_at` timestamp.
 
 ### done
 
@@ -125,7 +131,7 @@ Mark a ticket as completed.
 tckts done <TICKET-ID>
 ```
 
-If the ticket has incomplete dependencies, you'll see a warning listing the blocking tickets.
+Records the `completed_at` timestamp. If the ticket has incomplete dependencies, you'll see which tickets are blocking it.
 
 ### rm
 
@@ -160,22 +166,26 @@ Tickets are stored in `.tckts/<PREFIX>.tckts` files using a simple block format:
 ```
 # tckts | prefix: MYPROJECT | version: 1
 
---- MYPROJECT-1
+---
+id: MYPROJECT-1
 type: feature
-status: pending
+status: in_progress
 title: User authentication
-created: 2024-12-23
+created_at: 2024-12-23T10:30:45Z
+started_at: 2024-12-23T14:00:00Z
 priority: high
 
 Implement OAuth2 login flow with support for
 Google and GitHub providers.
 ---
 
---- MYPROJECT-2
+---
+id: MYPROJECT-2
 type: bug
 status: done
 title: Fix crash on startup
-created: 2024-12-23
+created_at: 2024-12-23T10:30:45Z
+completed_at: 2024-12-23T16:00:00Z
 depends: MYPROJECT-1
 ---
 ```
@@ -184,13 +194,26 @@ depends: MYPROJECT-1
 
 | Field | Required | Description |
 |-------|----------|-------------|
-| type | Yes | bug, feature, task, or chore |
-| status | Yes | pending or done |
-| title | Yes | Short summary |
-| created | Yes | Date in YYYY-MM-DD format |
+| id | Yes | Ticket ID (PREFIX-NUMBER) |
+| type | Yes | bug, feature, task, chore, or epic |
+| status | Yes | pending, in_progress, or done |
+| title | Yes | Short summary (max 280 chars) |
+| created_at | Yes | UTC timestamp (ISO 8601) |
+| started_at | No | When moved to in_progress |
+| completed_at | No | When marked as done |
 | depends | No | Comma-separated list of ticket IDs |
 | priority | No | low, medium, or high |
 | description | No | Free-form text after blank line |
+
+### Limits
+
+| Limit | Value |
+|-------|-------|
+| Title length | 280 characters |
+| Description length | 64 KB |
+| Tickets per project | 10,000 |
+| Dependencies per ticket | 100 |
+| Prefix length | 32 characters |
 
 ## Dependencies
 
@@ -215,7 +238,7 @@ zig build test
 zig build run -- help
 
 # Build with arguments
-zig build run -- add TEST feature "Test" ""
+zig build run -- add "Test" -t feature
 ```
 
 ## License

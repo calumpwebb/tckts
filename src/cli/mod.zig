@@ -47,6 +47,32 @@ pub fn toUpperPrefix(allocator: std.mem.Allocator, prefix: []const u8) ![]u8 {
     return upper;
 }
 
+/// Load a project by prefix, handling ProjectNotFound with user-friendly error
+pub fn loadProjectOrError(allocator: std.mem.Allocator, prefix: []const u8) !tckts.Project {
+    return tckts.loadProject(allocator, prefix) catch |err| {
+        if (err == error.ProjectNotFound) {
+            eprint("Error: Project '{s}' not found.\n", .{prefix});
+            printAvailableProjects(allocator);
+            return error.ProjectNotInitialized;
+        }
+        return err;
+    };
+}
+
+/// Parse a ticket ID from command args with user-friendly errors
+pub fn parseTicketIdArg(allocator: std.mem.Allocator, args: anytype, cmd_name: []const u8) !tckts.TicketId {
+    const id_str = args.next() orelse {
+        eprint("Error: Missing ticket ID.\n", .{});
+        eprint("Usage: tckts {s} <ID>\n", .{cmd_name});
+        return error.MissingArgument;
+    };
+
+    return tckts.TicketId.parse(allocator, id_str) catch {
+        eprint("Error: Invalid ticket ID '{s}'.\n", .{id_str});
+        return error.InvalidArgument;
+    };
+}
+
 // --- types ---
 
 pub const Command = enum {
@@ -54,6 +80,7 @@ pub const Command = enum {
     add,
     list,
     show,
+    start,
     done,
     rm,
     projects,
@@ -66,6 +93,7 @@ pub const Command = enum {
             .{ "list", Command.list },
             .{ "ls", Command.list },
             .{ "show", Command.show },
+            .{ "start", Command.start },
             .{ "done", Command.done },
             .{ "complete", Command.done },
             .{ "rm", Command.rm },
@@ -94,6 +122,7 @@ test "Command: fromString" {
     try testing.expectEqual(Command.list, Command.fromString("list").?);
     try testing.expectEqual(Command.list, Command.fromString("ls").?);
     try testing.expectEqual(Command.show, Command.fromString("show").?);
+    try testing.expectEqual(Command.start, Command.fromString("start").?);
     try testing.expectEqual(Command.done, Command.fromString("done").?);
     try testing.expectEqual(Command.done, Command.fromString("complete").?);
     try testing.expectEqual(Command.rm, Command.fromString("rm").?);

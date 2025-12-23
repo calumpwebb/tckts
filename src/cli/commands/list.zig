@@ -26,14 +26,7 @@ pub fn run(allocator: std.mem.Allocator, args: anytype) !void {
     const upper_prefix = try cli.toUpperPrefix(allocator, prefix);
     defer allocator.free(upper_prefix);
 
-    var project = tckts.loadProject(allocator, upper_prefix) catch |err| {
-        if (err == error.ProjectNotFound) {
-            cli.eprint("Error: Project '{s}' not found.\n", .{upper_prefix});
-            cli.printAvailableProjects(allocator);
-            return error.ProjectNotInitialized;
-        }
-        return err;
-    };
+    var project = try cli.loadProjectOrError(allocator, upper_prefix);
     defer project.deinit();
 
     if (project.tickets.items.len == 0) {

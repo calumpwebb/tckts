@@ -20,7 +20,7 @@ pub fn run(allocator: std.mem.Allocator, args: anytype) !void {
         } else if (mem.eql(u8, arg, "-t") or mem.eql(u8, arg, "--type")) {
             const type_str = args.next() orelse return error.MissingArgument;
             ticket_type = tckts.TicketType.fromString(type_str) orelse {
-                cli.eprint("Error: Invalid type '{s}'. Use: bug, feature, task, chore\n", .{type_str});
+                cli.eprint("Error: Invalid type '{s}'. Use: bug, feature, task, chore, epic\n", .{type_str});
                 return error.InvalidArgument;
             };
         } else if (mem.eql(u8, arg, "-m") or mem.eql(u8, arg, "--message")) {
@@ -47,14 +47,7 @@ pub fn run(allocator: std.mem.Allocator, args: anytype) !void {
     const upper_prefix = try cli.toUpperPrefix(allocator, prefix);
     defer allocator.free(upper_prefix);
 
-    var project = tckts.loadProject(allocator, upper_prefix) catch |err| {
-        if (err == error.ProjectNotFound) {
-            cli.eprint("Error: Project '{s}' not found.\n", .{upper_prefix});
-            cli.printAvailableProjects(allocator);
-            return error.ProjectNotInitialized;
-        }
-        return err;
-    };
+    var project = try cli.loadProjectOrError(allocator, upper_prefix);
     defer project.deinit();
 
     // Parse dependencies
@@ -75,6 +68,20 @@ pub fn run(allocator: std.mem.Allocator, args: anytype) !void {
             };
             try depends.append(allocator, dep_id);
         }
+    }
+
+    // Validate limits with friendly messages showing actual vs max
+    if (title.?.len > tckts.max_title_length_bytes) {
+        cli.eprint("Error: Title is {d} characters (max {d}).\n", .{ title.?.len, tckts.max_title_length_bytes });
+        return error.TitleTooLong;
+    }
+    if (description.len > tckts.max_description_length_bytes) {
+        cli.eprint("Error: Description is {d} bytes (max {d}).\n", .{ description.len, tckts.max_description_length_bytes });
+        return error.DescriptionTooLong;
+    }
+    if (depends.items.len > tckts.max_dependencies_per_ticket) {
+        cli.eprint("Error: Too many dependencies: {d} (max {d}).\n", .{ depends.items.len, tckts.max_dependencies_per_ticket });
+        return error.TooManyDependencies;
     }
 
     const ticket = try project.addTicket(ticket_type, title.?, description, depends.items, priority);

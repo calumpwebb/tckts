@@ -11,8 +11,108 @@ const format_version = 1;
 const tckts_dir = ".tckts";
 const file_extension = ".tckts";
 const default_prefix = "MAIN";
+
+// --- limits ---
+// These limits ensure predictable memory usage and prevent abuse
+
+/// Max title length (single line, ~Twitter length)
+pub const max_title_length_bytes = 280;
+
+/// Max description length (generous - a full document)
+pub const max_description_length_bytes = 64 * 1024; // 64KB
+
+/// Max tickets per project
+pub const max_tickets_per_project = 10_000;
+
+/// Max prefix length
+pub const max_prefix_length_bytes = 32;
+
+/// Max dependencies per ticket
+pub const max_dependencies_per_ticket = 100;
+
+// Internal constants
 const max_line_length_bytes = 4096;
-const max_description_length_bytes = 65536;
+const timestamp_length_bytes = 20; // "YYYY-MM-DDTHH:MM:SSZ"
+
+// --- helpers ---
+
+/// Format current time as UTC ISO 8601 timestamp (e.g., "2025-12-23T10:30:45Z")
+fn formatUtcTimestamp(allocator: std.mem.Allocator) ![]u8 {
+    const timestamp = std.time.timestamp();
+    const epoch_secs: u64 = @intCast(timestamp);
+
+    const secs_per_day = std.time.s_per_day;
+    const secs_per_hour = std.time.s_per_hour;
+    const secs_per_min = std.time.s_per_min;
+
+    const epoch_day = std.time.epoch.EpochDay{ .day = @intCast(epoch_secs / secs_per_day) };
+    const year_day = epoch_day.calculateYearDay();
+    const month_day = year_day.calculateMonthDay();
+
+    const day_secs = epoch_secs % secs_per_day;
+    const hour: u8 = @intCast(day_secs / secs_per_hour);
+    const minute: u8 = @intCast((day_secs % secs_per_hour) / secs_per_min);
+    const second: u8 = @intCast(day_secs % secs_per_min);
+
+    var buf: [timestamp_length_bytes]u8 = undefined;
+    const timestamp_str = fmt.bufPrint(&buf, "{d:0>4}-{d:0>2}-{d:0>2}T{d:0>2}:{d:0>2}:{d:0>2}Z", .{
+        year_day.year,
+        @intFromEnum(month_day.month),
+        month_day.day_index + 1,
+        hour,
+        minute,
+        second,
+    }) catch unreachable;
+
+    return allocator.dupe(u8, timestamp_str);
+}
+
+/// Escape description content to prevent format injection
+fn escapeDescription(allocator: std.mem.Allocator, description: []const u8) ![]u8 {
+    // Escape lines starting with "---" by prefixing with a backslash
+    var result: std.ArrayList(u8) = .empty;
+    errdefer result.deinit(allocator);
+
+    var lines = mem.splitSequence(u8, description, "\n");
+    var first = true;
+    while (lines.next()) |line| {
+        if (!first) try result.append(allocator, '\n');
+        first = false;
+
+        const trimmed = mem.trimLeft(u8, line, " \t");
+        if (mem.startsWith(u8, trimmed, "---")) {
+            try result.append(allocator, '\\');
+        }
+        try result.appendSlice(allocator, line);
+    }
+
+    return result.toOwnedSlice(allocator);
+}
+
+/// Unescape description content
+fn unescapeDescription(allocator: std.mem.Allocator, escaped: []const u8) ![]u8 {
+    var result: std.ArrayList(u8) = .empty;
+    errdefer result.deinit(allocator);
+
+    var lines = mem.splitSequence(u8, escaped, "\n");
+    var first = true;
+    while (lines.next()) |line| {
+        if (!first) try result.append(allocator, '\n');
+        first = false;
+
+        // Unescape lines that start with \---
+        const trimmed = mem.trimLeft(u8, line, " \t");
+        const leading_spaces = line.len - trimmed.len;
+        if (mem.startsWith(u8, trimmed, "\\---")) {
+            try result.appendSlice(allocator, line[0..leading_spaces]);
+            try result.appendSlice(allocator, trimmed[1..]);
+        } else {
+            try result.appendSlice(allocator, line);
+        }
+    }
+
+    return result.toOwnedSlice(allocator);
+}
 
 // --- types ---
 
@@ -42,12 +142,14 @@ pub const TicketType = enum {
     feature,
     task,
     chore,
+    epic,
 
     pub fn fromString(s: []const u8) ?TicketType {
         if (mem.eql(u8, s, "bug")) return .bug;
         if (mem.eql(u8, s, "feature")) return .feature;
         if (mem.eql(u8, s, "task")) return .task;
         if (mem.eql(u8, s, "chore")) return .chore;
+        if (mem.eql(u8, s, "epic")) return .epic;
         return null;
     }
 
@@ -57,16 +159,19 @@ pub const TicketType = enum {
             .feature => "feature",
             .task => "task",
             .chore => "chore",
+            .epic => "epic",
         };
     }
 };
 
 pub const Status = enum {
     pending,
+    in_progress,
     done,
 
     pub fn fromString(s: []const u8) ?Status {
         if (mem.eql(u8, s, "pending")) return .pending;
+        if (mem.eql(u8, s, "in_progress")) return .in_progress;
         if (mem.eql(u8, s, "done")) return .done;
         return null;
     }
@@ -74,6 +179,7 @@ pub const Status = enum {
     pub fn toString(self: Status) []const u8 {
         return switch (self) {
             .pending => "pending",
+            .in_progress => "in_progress",
             .done => "done",
         };
     }
@@ -119,7 +225,9 @@ pub const Ticket = struct {
     ticket_type: TicketType,
     status: Status,
     title: []const u8,
-    created: []const u8,
+    created_at: []const u8,
+    started_at: ?[]const u8,
+    completed_at: ?[]const u8,
     depends: []TicketId,
     priority: ?Priority,
     description: []const u8,
@@ -127,7 +235,9 @@ pub const Ticket = struct {
     pub fn deinit(self: *Ticket, allocator: std.mem.Allocator) void {
         allocator.free(self.id.prefix);
         allocator.free(self.title);
-        allocator.free(self.created);
+        allocator.free(self.created_at);
+        if (self.started_at) |s| allocator.free(s);
+        if (self.completed_at) |c| allocator.free(c);
         for (self.depends) |*dep| {
             allocator.free(dep.prefix);
         }
@@ -144,6 +254,8 @@ pub const Project = struct {
     next_number: u32,
 
     pub fn init(allocator: std.mem.Allocator, prefix: []const u8) !Project {
+        if (prefix.len > max_prefix_length_bytes) return error.PrefixTooLong;
+
         const prefix_copy = try allocator.dupe(u8, prefix);
         return Project{
             .allocator = allocator,
@@ -175,6 +287,12 @@ pub const Project = struct {
     }
 
     pub fn addTicket(self: *Project, ticket_type: TicketType, title: []const u8, description: []const u8, depends: []const TicketId, priority: ?Priority) !*Ticket {
+        // Validate limits
+        if (title.len > max_title_length_bytes) return error.TitleTooLong;
+        if (description.len > max_description_length_bytes) return error.DescriptionTooLong;
+        if (self.tickets.items.len >= max_tickets_per_project) return error.TooManyTickets;
+        if (depends.len > max_dependencies_per_ticket) return error.TooManyDependencies;
+
         const title_copy = try self.allocator.dupe(u8, title);
         errdefer self.allocator.free(title_copy);
 
@@ -194,29 +312,18 @@ pub const Project = struct {
             };
         }
 
-        // Get current date
-        const timestamp = std.time.timestamp();
-        const epoch_secs: u64 = @intCast(timestamp);
-        const epoch_day = std.time.epoch.EpochDay{ .day = @intCast(epoch_secs / std.time.s_per_day) };
-        const year_day = epoch_day.calculateYearDay();
-        const month_day = year_day.calculateMonthDay();
-
-        var date_buf: [10]u8 = undefined;
-        const date_str = fmt.bufPrint(&date_buf, "{d:0>4}-{d:0>2}-{d:0>2}", .{
-            year_day.year,
-            @intFromEnum(month_day.month),
-            month_day.day_index + 1,
-        }) catch unreachable;
-
-        const created = try self.allocator.dupe(u8, date_str);
-        errdefer self.allocator.free(created);
+        // Get current UTC timestamp
+        const created_at = try formatUtcTimestamp(self.allocator);
+        errdefer self.allocator.free(created_at);
 
         const ticket = Ticket{
             .id = TicketId{ .prefix = prefix_copy, .number = self.next_number },
             .ticket_type = ticket_type,
             .status = .pending,
             .title = title_copy,
-            .created = created,
+            .created_at = created_at,
+            .started_at = null,
+            .completed_at = null,
             .depends = depends_copy,
             .priority = priority,
             .description = desc_copy,
@@ -289,9 +396,20 @@ pub const Project = struct {
         return blocking.toOwnedSlice(self.allocator);
     }
 
+    pub fn markInProgress(self: *Project, number: u32) !void {
+        const ticket = self.findTicket(number) orelse return error.TicketNotFound;
+        if (ticket.status == .done) return error.AlreadyDone;
+
+        ticket.status = .in_progress;
+        if (ticket.started_at) |old| self.allocator.free(old);
+        ticket.started_at = try formatUtcTimestamp(self.allocator);
+    }
+
     pub fn markDone(self: *Project, number: u32) !void {
         const ticket = self.findTicket(number) orelse return error.TicketNotFound;
         ticket.status = .done;
+        if (ticket.completed_at) |old| self.allocator.free(old);
+        ticket.completed_at = try formatUtcTimestamp(self.allocator);
     }
 };
 
@@ -310,6 +428,14 @@ pub const FileError = error{
     IoError,
 };
 
+pub const ValidationError = error{
+    TitleTooLong,
+    DescriptionTooLong,
+    TooManyTickets,
+    TooManyDependencies,
+    PrefixTooLong,
+};
+
 /// Parse a .tckts file into a Project
 pub fn parseFile(allocator: std.mem.Allocator, content: []const u8) ParseError!Project {
     var lines = mem.splitSequence(u8, content, "\n");
@@ -321,47 +447,34 @@ pub fn parseFile(allocator: std.mem.Allocator, content: []const u8) ParseError!P
     var project = Project.init(allocator, prefix) catch return error.OutOfMemory;
     errdefer project.deinit();
 
-    // Parse ticket blocks
-    var current_block: ?[]const u8 = null;
+    // Parse ticket blocks - blocks are delimited by --- lines
+    var in_block = false;
     var block_start: usize = 0;
     var pos: usize = header.len + 1;
 
     while (lines.next()) |line| {
         const trimmed = mem.trim(u8, line, " \t");
-        if (mem.startsWith(u8, trimmed, "---")) {
-            // Check if this is a block start (--- PREFIX-N) or just a terminator (---)
-            const after_dashes = mem.trim(u8, trimmed["---".len..], " \t");
-            const is_block_start = after_dashes.len > 0 and mem.indexOf(u8, after_dashes, "-") != null;
 
-            if (is_block_start) {
-                // Process previous block if exists
-                if (current_block) |_| {
-                    const block_content = content[block_start..pos];
-                    const ticket = parseTicketBlock(allocator, block_content, prefix) catch |e| {
-                        return e;
-                    };
-                    project.tickets.append(allocator, ticket) catch return error.OutOfMemory;
-                    if (ticket.id.number >= project.next_number) {
-                        project.next_number = ticket.id.number + 1;
-                    }
+        // Check for block delimiter (--- but not escaped \---)
+        if (mem.eql(u8, trimmed, "---")) {
+            if (in_block) {
+                // End of block - process it
+                const block_content = content[block_start .. pos + line.len];
+                const ticket = parseTicketBlock(allocator, block_content, prefix) catch |e| {
+                    return e;
+                };
+                project.tickets.append(allocator, ticket) catch return error.OutOfMemory;
+                if (ticket.id.number >= project.next_number) {
+                    project.next_number = ticket.id.number + 1;
                 }
-                current_block = line;
+                in_block = false;
+            } else {
+                // Start of block
+                in_block = true;
                 block_start = pos;
             }
         }
         pos += line.len + 1;
-    }
-
-    // Process last block
-    if (current_block) |_| {
-        const block_content = content[block_start..];
-        const ticket = parseTicketBlock(allocator, block_content, prefix) catch |e| {
-            return e;
-        };
-        project.tickets.append(allocator, ticket) catch return error.OutOfMemory;
-        if (ticket.id.number >= project.next_number) {
-            project.next_number = ticket.id.number + 1;
-        }
     }
 
     return project;
@@ -395,25 +508,19 @@ fn parseHeader(line: []const u8) ?[]const u8 {
 fn parseTicketBlock(allocator: std.mem.Allocator, block: []const u8, expected_prefix: []const u8) ParseError!Ticket {
     var lines = mem.splitSequence(u8, block, "\n");
 
-    // First line: --- PREFIX-N
+    // First line: --- (block separator)
     const first_line = lines.next() orelse return error.InvalidTicketBlock;
     const trimmed_first = mem.trim(u8, first_line, " \t");
     if (!mem.startsWith(u8, trimmed_first, "---")) return error.InvalidTicketBlock;
 
-    const id_str = mem.trim(u8, trimmed_first["---".len..], " \t");
-    if (id_str.len == 0) return error.InvalidTicketBlock;
-
-    var id = TicketId.parse(allocator, id_str) catch return error.InvalidTicketId;
-    errdefer id.deinit(allocator);
-
-    // Verify prefix matches
-    if (!mem.eql(u8, id.prefix, expected_prefix)) return error.InvalidTicketId;
-
     // Parse metadata lines until empty line
+    var id_str: ?[]const u8 = null;
     var ticket_type: ?TicketType = null;
     var status: ?Status = null;
     var title: ?[]const u8 = null;
-    var created: ?[]const u8 = null;
+    var created_at: ?[]const u8 = null;
+    var started_at: ?[]const u8 = null;
+    var completed_at: ?[]const u8 = null;
     var depends_str: ?[]const u8 = null;
     var priority: ?Priority = null;
     var in_description = false;
@@ -423,8 +530,8 @@ fn parseTicketBlock(allocator: std.mem.Allocator, block: []const u8, expected_pr
     while (lines.next()) |line| {
         const trimmed = mem.trim(u8, line, " \t");
 
-        // Check for end of block marker
-        if (mem.startsWith(u8, trimmed, "---")) break;
+        // Check for end of block marker (but not escaped \---)
+        if (mem.startsWith(u8, trimmed, "---") and !mem.startsWith(u8, trimmed, "\\---")) break;
 
         if (in_description) {
             description_lines.append(allocator, line) catch return error.OutOfMemory;
@@ -437,7 +544,9 @@ fn parseTicketBlock(allocator: std.mem.Allocator, block: []const u8, expected_pr
         }
 
         // Parse metadata
-        if (mem.startsWith(u8, trimmed, "type:")) {
+        if (mem.startsWith(u8, trimmed, "id:")) {
+            id_str = mem.trim(u8, trimmed["id:".len..], " \t");
+        } else if (mem.startsWith(u8, trimmed, "type:")) {
             const val = mem.trim(u8, trimmed["type:".len..], " \t");
             ticket_type = TicketType.fromString(val);
         } else if (mem.startsWith(u8, trimmed, "status:")) {
@@ -445,8 +554,12 @@ fn parseTicketBlock(allocator: std.mem.Allocator, block: []const u8, expected_pr
             status = Status.fromString(val);
         } else if (mem.startsWith(u8, trimmed, "title:")) {
             title = mem.trim(u8, trimmed["title:".len..], " \t");
-        } else if (mem.startsWith(u8, trimmed, "created:")) {
-            created = mem.trim(u8, trimmed["created:".len..], " \t");
+        } else if (mem.startsWith(u8, trimmed, "created_at:")) {
+            created_at = mem.trim(u8, trimmed["created_at:".len..], " \t");
+        } else if (mem.startsWith(u8, trimmed, "started_at:")) {
+            started_at = mem.trim(u8, trimmed["started_at:".len..], " \t");
+        } else if (mem.startsWith(u8, trimmed, "completed_at:")) {
+            completed_at = mem.trim(u8, trimmed["completed_at:".len..], " \t");
         } else if (mem.startsWith(u8, trimmed, "depends:")) {
             depends_str = mem.trim(u8, trimmed["depends:".len..], " \t");
         } else if (mem.startsWith(u8, trimmed, "priority:")) {
@@ -456,16 +569,35 @@ fn parseTicketBlock(allocator: std.mem.Allocator, block: []const u8, expected_pr
     }
 
     // Validate required fields
-    if (ticket_type == null or status == null or title == null or created == null) {
+    if (id_str == null or ticket_type == null or status == null or title == null or created_at == null) {
         return error.MissingRequiredField;
     }
+
+    // Parse and validate ID
+    var id = TicketId.parse(allocator, id_str.?) catch return error.InvalidTicketId;
+    errdefer id.deinit(allocator);
+
+    // Verify prefix matches
+    if (!mem.eql(u8, id.prefix, expected_prefix)) return error.InvalidTicketId;
 
     // Copy strings
     const title_copy = allocator.dupe(u8, title.?) catch return error.OutOfMemory;
     errdefer allocator.free(title_copy);
 
-    const created_copy = allocator.dupe(u8, created.?) catch return error.OutOfMemory;
-    errdefer allocator.free(created_copy);
+    const created_at_copy = allocator.dupe(u8, created_at.?) catch return error.OutOfMemory;
+    errdefer allocator.free(created_at_copy);
+
+    const started_at_copy: ?[]u8 = if (started_at) |s|
+        allocator.dupe(u8, s) catch return error.OutOfMemory
+    else
+        null;
+    errdefer if (started_at_copy) |s| allocator.free(s);
+
+    const completed_at_copy: ?[]u8 = if (completed_at) |c|
+        allocator.dupe(u8, c) catch return error.OutOfMemory
+    else
+        null;
+    errdefer if (completed_at_copy) |c| allocator.free(c);
 
     // Parse depends
     var depends: std.ArrayList(TicketId) = .empty;
@@ -494,23 +626,25 @@ fn parseTicketBlock(allocator: std.mem.Allocator, block: []const u8, expected_pr
     }
 
     // Trim trailing whitespace from description
-    var desc_slice = desc_builder.toOwnedSlice(allocator) catch return error.OutOfMemory;
+    const desc_slice = desc_builder.toOwnedSlice(allocator) catch return error.OutOfMemory;
+    defer allocator.free(desc_slice);
+
     const desc_trimmed = mem.trimRight(u8, desc_slice, " \t\n");
-    if (desc_trimmed.len < desc_slice.len) {
-        const new_desc = allocator.dupe(u8, desc_trimmed) catch return error.OutOfMemory;
-        allocator.free(desc_slice);
-        desc_slice = new_desc;
-    }
+
+    // Unescape description content
+    const unescaped_desc = unescapeDescription(allocator, desc_trimmed) catch return error.OutOfMemory;
 
     return Ticket{
         .id = id,
         .ticket_type = ticket_type.?,
         .status = status.?,
         .title = title_copy,
-        .created = created_copy,
+        .created_at = created_at_copy,
+        .started_at = started_at_copy,
+        .completed_at = completed_at_copy,
         .depends = depends.toOwnedSlice(allocator) catch return error.OutOfMemory,
         .priority = priority,
-        .description = desc_slice,
+        .description = unescaped_desc,
     };
 }
 
@@ -526,11 +660,20 @@ pub fn serializeProject(allocator: std.mem.Allocator, project: *const Project) !
 
     // Write tickets
     for (project.tickets.items) |ticket| {
-        try writer.print("\n--- {s}-{d}\n", .{ ticket.id.prefix, ticket.id.number });
+        try writer.writeAll("\n---\n");
+        try writer.print("id: {s}-{d}\n", .{ ticket.id.prefix, ticket.id.number });
         try writer.print("type: {s}\n", .{ticket.ticket_type.toString()});
         try writer.print("status: {s}\n", .{ticket.status.toString()});
         try writer.print("title: {s}\n", .{ticket.title});
-        try writer.print("created: {s}\n", .{ticket.created});
+        try writer.print("created_at: {s}\n", .{ticket.created_at});
+
+        if (ticket.started_at) |s| {
+            try writer.print("started_at: {s}\n", .{s});
+        }
+
+        if (ticket.completed_at) |c| {
+            try writer.print("completed_at: {s}\n", .{c});
+        }
 
         if (ticket.depends.len > 0) {
             try writer.writeAll("depends: ");
@@ -547,7 +690,9 @@ pub fn serializeProject(allocator: std.mem.Allocator, project: *const Project) !
 
         if (ticket.description.len > 0) {
             try writer.writeAll("\n");
-            try writer.writeAll(ticket.description);
+            const escaped = try escapeDescription(allocator, ticket.description);
+            defer allocator.free(escaped);
+            try writer.writeAll(escaped);
             try writer.writeAll("\n");
         }
 
@@ -769,20 +914,22 @@ test "parseFile: valid file" {
     const content =
         \\# tckts | prefix: TEST | version: 1
         \\
-        \\--- TEST-1
+        \\---
+        \\id: TEST-1
         \\type: feature
         \\status: done
         \\title: First ticket
-        \\created: 2024-12-23
+        \\created_at: 2024-12-23T10:30:00Z
         \\
         \\This is the description.
         \\---
         \\
-        \\--- TEST-2
+        \\---
+        \\id: TEST-2
         \\type: bug
         \\status: pending
         \\title: Second ticket
-        \\created: 2024-12-23
+        \\created_at: 2024-12-23T10:30:00Z
         \\depends: TEST-1
         \\priority: high
         \\
@@ -868,10 +1015,11 @@ test "parseFile: missing required field" {
     const content =
         \\# tckts | prefix: TEST | version: 1
         \\
-        \\--- TEST-1
+        \\---
+        \\id: TEST-1
         \\type: feature
         \\status: done
-        \\created: 2024-12-23
+        \\created_at: 2024-12-23T10:30:00Z
         \\---
     ;
     // Missing title field
@@ -1053,11 +1201,12 @@ test "parseFile: ticket with empty description" {
     const content =
         \\# tckts | prefix: TEST | version: 1
         \\
-        \\--- TEST-1
+        \\---
+        \\id: TEST-1
         \\type: task
         \\status: pending
         \\title: No description ticket
-        \\created: 2024-12-23
+        \\created_at: 2024-12-23T10:30:00Z
         \\---
     ;
 
@@ -1073,11 +1222,12 @@ test "parseFile: ticket with multiline description" {
     const content =
         \\# tckts | prefix: TEST | version: 1
         \\
-        \\--- TEST-1
+        \\---
+        \\id: TEST-1
         \\type: feature
         \\status: pending
         \\title: Multi-line description
-        \\created: 2024-12-23
+        \\created_at: 2024-12-23T10:30:00Z
         \\
         \\Line one.
         \\Line two.
@@ -1097,25 +1247,28 @@ test "parseFile: multiple dependencies" {
     const content =
         \\# tckts | prefix: TEST | version: 1
         \\
-        \\--- TEST-1
+        \\---
+        \\id: TEST-1
         \\type: task
         \\status: done
         \\title: First
-        \\created: 2024-12-23
+        \\created_at: 2024-12-23T10:30:00Z
         \\---
         \\
-        \\--- TEST-2
+        \\---
+        \\id: TEST-2
         \\type: task
         \\status: done
         \\title: Second
-        \\created: 2024-12-23
+        \\created_at: 2024-12-23T10:30:00Z
         \\---
         \\
-        \\--- TEST-3
+        \\---
+        \\id: TEST-3
         \\type: task
         \\status: pending
         \\title: Third depends on both
-        \\created: 2024-12-23
+        \\created_at: 2024-12-23T10:30:00Z
         \\depends: TEST-1, TEST-2
         \\---
     ;

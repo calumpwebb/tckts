@@ -1,4 +1,5 @@
 const std = @import("std");
+const tckts = @import("tckts");
 const cli = @import("cli/mod.zig");
 const commands = @import("cli/commands/mod.zig");
 
@@ -45,6 +46,26 @@ pub fn main() !void {
                 cli.eprint("Error: Project already exists.\n", .{});
                 process.exit(1);
             },
+            error.AlreadyDone => {
+                cli.eprint("Error: Ticket is already done.\n", .{});
+                process.exit(1);
+            },
+            error.TitleTooLong => {
+                cli.eprint("Error: Title too long (max {d} characters).\n", .{tckts.max_title_length_bytes});
+                process.exit(1);
+            },
+            error.DescriptionTooLong => {
+                cli.eprint("Error: Description too long (max {d} bytes).\n", .{tckts.max_description_length_bytes});
+                process.exit(1);
+            },
+            error.TooManyTickets => {
+                cli.eprint("Error: Too many tickets in project (max {d}).\n", .{tckts.max_tickets_per_project});
+                process.exit(1);
+            },
+            error.PrefixTooLong => {
+                cli.eprint("Error: Prefix too long (max {d} characters).\n", .{tckts.max_prefix_length_bytes});
+                process.exit(1);
+            },
             else => {
                 cli.eprint("Error: {any}\n", .{err});
                 process.exit(2);
@@ -74,6 +95,7 @@ fn run(allocator: std.mem.Allocator) !void {
         .add => try commands.add.run(allocator, &args),
         .list => try commands.list.run(allocator, &args),
         .show => try commands.show.run(allocator, &args),
+        .start => try commands.start.run(allocator, &args),
         .done => try commands.done.run(allocator, &args),
         .rm => try commands.rm.run(allocator, &args),
         .projects => try commands.projects.run(allocator),
@@ -92,6 +114,7 @@ fn printUsage() void {
         \\  add <title>       Add a new ticket
         \\  list [PREFIX]     List tickets
         \\  show <ID>         Show ticket details
+        \\  start <ID>        Mark ticket as in-progress
         \\  done <ID>         Mark ticket as complete
         \\  rm <ID>           Remove a ticket
         \\  projects          List all projects
@@ -122,7 +145,7 @@ fn printHelp() void {
         \\        Add a new ticket to a project.
         \\        Options:
         \\          -p, --project <PREFIX>   Project prefix (default: MAIN)
-        \\          -t, --type <TYPE>        Ticket type: bug, feature, task, chore
+        \\          -t, --type <TYPE>        Ticket type: bug, feature, task, chore, epic
         \\          -d, --depends <IDs>      Comma-separated dependency IDs
         \\          -m, --message <DESC>     Ticket description
         \\          --priority <LEVEL>       Priority: low, medium, high
@@ -139,6 +162,11 @@ fn printHelp() void {
         \\    show <ID>
         \\        Show detailed information about a ticket.
         \\        Example: tckts show BACKEND-1
+        \\
+        \\    start <ID>
+        \\        Mark a ticket as in-progress.
+        \\        Records the started_at timestamp.
+        \\        Example: tckts start BACKEND-1
         \\
         \\    done <ID>
         \\        Mark a ticket as complete.
@@ -164,6 +192,7 @@ fn printHelp() void {
         \\    tckts add "Set up database" -p BACKEND -t task
         \\    tckts add "Implement auth" -p BACKEND -t feature -d BACKEND-1
         \\    tckts list BACKEND
+        \\    tckts start BACKEND-1
         \\    tckts done BACKEND-1
         \\
     , .{version});
