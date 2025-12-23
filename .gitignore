@@ -1,0 +1,15 @@
+# Zig build artifacts
+zig-out/
+zig-cache/
+.zig-cache/
+
+# tckts data directory (for testing)
+.tckts/
+
+# Editor
+.vscode/
+*.swp
+*~
+
+# OS
+.DS_Store
