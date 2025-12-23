@@ -844,3 +844,285 @@ test "serializeProject: roundtrip" {
     try testing.expectEqual(TicketType.bug, t2.ticket_type);
     try testing.expectEqual(@as(usize, 1), t2.depends.len);
 }
+
+test "parseFile: invalid header - missing prefix" {
+    const allocator = testing.allocator;
+    const content = "# tckts | version: 1\n";
+    try testing.expectError(error.InvalidHeader, parseFile(allocator, content));
+}
+
+test "parseFile: invalid header - missing version" {
+    const allocator = testing.allocator;
+    const content = "# tckts | prefix: TEST\n";
+    try testing.expectError(error.InvalidHeader, parseFile(allocator, content));
+}
+
+test "parseFile: invalid header - wrong version" {
+    const allocator = testing.allocator;
+    const content = "# tckts | prefix: TEST | version: 999\n";
+    try testing.expectError(error.InvalidHeader, parseFile(allocator, content));
+}
+
+test "parseFile: missing required field" {
+    const allocator = testing.allocator;
+    const content =
+        \\# tckts | prefix: TEST | version: 1
+        \\
+        \\--- TEST-1
+        \\type: feature
+        \\status: done
+        \\created: 2024-12-23
+        \\---
+    ;
+    // Missing title field
+    try testing.expectError(error.MissingRequiredField, parseFile(allocator, content));
+}
+
+test "Project: canComplete with no dependencies" {
+    const allocator = testing.allocator;
+    var project = try Project.init(allocator, "TEST");
+    defer project.deinit();
+
+    _ = try project.addTicket(.task, "Standalone ticket", "", &.{}, null);
+
+    const blocking = try project.canComplete(1);
+    defer allocator.free(blocking);
+
+    try testing.expectEqual(@as(usize, 0), blocking.len);
+}
+
+test "Project: canComplete with incomplete dependency" {
+    const allocator = testing.allocator;
+    var project = try Project.init(allocator, "TEST");
+    defer project.deinit();
+
+    _ = try project.addTicket(.task, "First ticket", "", &.{}, null);
+
+    var dep_id = try TicketId.parse(allocator, "TEST-1");
+    defer dep_id.deinit(allocator);
+    _ = try project.addTicket(.task, "Second ticket", "", &.{dep_id}, null);
+
+    const blocking = try project.canComplete(2);
+    defer allocator.free(blocking);
+
+    try testing.expectEqual(@as(usize, 1), blocking.len);
+    try testing.expectEqual(@as(u32, 1), blocking[0].number);
+}
+
+test "Project: canComplete with completed dependency" {
+    const allocator = testing.allocator;
+    var project = try Project.init(allocator, "TEST");
+    defer project.deinit();
+
+    _ = try project.addTicket(.task, "First ticket", "", &.{}, null);
+    try project.markDone(1);
+
+    var dep_id = try TicketId.parse(allocator, "TEST-1");
+    defer dep_id.deinit(allocator);
+    _ = try project.addTicket(.task, "Second ticket", "", &.{dep_id}, null);
+
+    const blocking = try project.canComplete(2);
+    defer allocator.free(blocking);
+
+    try testing.expectEqual(@as(usize, 0), blocking.len);
+}
+
+test "Project: remove ticket clears dependencies" {
+    const allocator = testing.allocator;
+    var project = try Project.init(allocator, "TEST");
+    defer project.deinit();
+
+    _ = try project.addTicket(.task, "First ticket", "", &.{}, null);
+
+    var dep_id = try TicketId.parse(allocator, "TEST-1");
+    defer dep_id.deinit(allocator);
+    _ = try project.addTicket(.task, "Second ticket", "", &.{dep_id}, null);
+
+    // Remove the dependency
+    try project.removeTicket(1);
+
+    // Second ticket should no longer have dependencies
+    const t2 = project.findTicket(2).?;
+    try testing.expectEqual(@as(usize, 0), t2.depends.len);
+}
+
+test "Project: multiple tickets with chained dependencies" {
+    const allocator = testing.allocator;
+    var project = try Project.init(allocator, "CHAIN");
+    defer project.deinit();
+
+    _ = try project.addTicket(.task, "Task 1", "", &.{}, null);
+
+    var dep1 = try TicketId.parse(allocator, "CHAIN-1");
+    defer dep1.deinit(allocator);
+    _ = try project.addTicket(.task, "Task 2 depends on 1", "", &.{dep1}, null);
+
+    var dep2 = try TicketId.parse(allocator, "CHAIN-2");
+    defer dep2.deinit(allocator);
+    _ = try project.addTicket(.task, "Task 3 depends on 2", "", &.{dep2}, null);
+
+    // Task 3 should be blocked by task 2
+    const blocking3 = try project.canComplete(3);
+    defer allocator.free(blocking3);
+    try testing.expectEqual(@as(usize, 1), blocking3.len);
+    try testing.expectEqual(@as(u32, 2), blocking3[0].number);
+
+    // Task 2 should be blocked by task 1
+    const blocking2 = try project.canComplete(2);
+    defer allocator.free(blocking2);
+    try testing.expectEqual(@as(usize, 1), blocking2.len);
+    try testing.expectEqual(@as(u32, 1), blocking2[0].number);
+
+    // Task 1 has no blockers
+    const blocking1 = try project.canComplete(1);
+    defer allocator.free(blocking1);
+    try testing.expectEqual(@as(usize, 0), blocking1.len);
+}
+
+test "Project: markDone on nonexistent ticket" {
+    const allocator = testing.allocator;
+    var project = try Project.init(allocator, "TEST");
+    defer project.deinit();
+
+    try testing.expectError(error.TicketNotFound, project.markDone(999));
+}
+
+test "Project: removeTicket on nonexistent ticket" {
+    const allocator = testing.allocator;
+    var project = try Project.init(allocator, "TEST");
+    defer project.deinit();
+
+    try testing.expectError(error.TicketNotFound, project.removeTicket(999));
+}
+
+test "Project: canComplete on nonexistent ticket" {
+    const allocator = testing.allocator;
+    var project = try Project.init(allocator, "TEST");
+    defer project.deinit();
+
+    try testing.expectError(error.TicketNotFound, project.canComplete(999));
+}
+
+test "Project: findTicketById matches prefix" {
+    const allocator = testing.allocator;
+    var project = try Project.init(allocator, "ABC");
+    defer project.deinit();
+
+    _ = try project.addTicket(.task, "Test", "", &.{}, null);
+
+    // Correct prefix
+    var id1 = try TicketId.parse(allocator, "ABC-1");
+    defer id1.deinit(allocator);
+    try testing.expect(project.findTicketById(id1) != null);
+
+    // Wrong prefix
+    var id2 = try TicketId.parse(allocator, "XYZ-1");
+    defer id2.deinit(allocator);
+    try testing.expect(project.findTicketById(id2) == null);
+}
+
+test "TicketId: parse with hyphen in prefix" {
+    const allocator = testing.allocator;
+    var id = try TicketId.parse(allocator, "MY-PROJECT-42");
+    defer id.deinit(allocator);
+
+    try testing.expectEqualStrings("MY-PROJECT", id.prefix);
+    try testing.expectEqual(@as(u32, 42), id.number);
+}
+
+test "serializeProject: empty project" {
+    const allocator = testing.allocator;
+
+    var project = try Project.init(allocator, "EMPTY");
+    defer project.deinit();
+
+    const serialized = try serializeProject(allocator, &project);
+    defer allocator.free(serialized);
+
+    try testing.expectEqualStrings("# tckts | prefix: EMPTY | version: 1\n", serialized);
+
+    var parsed = try parseFile(allocator, serialized);
+    defer parsed.deinit();
+
+    try testing.expectEqualStrings("EMPTY", parsed.prefix);
+    try testing.expectEqual(@as(usize, 0), parsed.tickets.items.len);
+}
+
+test "parseFile: ticket with empty description" {
+    const allocator = testing.allocator;
+    const content =
+        \\# tckts | prefix: TEST | version: 1
+        \\
+        \\--- TEST-1
+        \\type: task
+        \\status: pending
+        \\title: No description ticket
+        \\created: 2024-12-23
+        \\---
+    ;
+
+    var project = try parseFile(allocator, content);
+    defer project.deinit();
+
+    const t = project.findTicket(1).?;
+    try testing.expectEqualStrings("", t.description);
+}
+
+test "parseFile: ticket with multiline description" {
+    const allocator = testing.allocator;
+    const content =
+        \\# tckts | prefix: TEST | version: 1
+        \\
+        \\--- TEST-1
+        \\type: feature
+        \\status: pending
+        \\title: Multi-line description
+        \\created: 2024-12-23
+        \\
+        \\Line one.
+        \\Line two.
+        \\Line three.
+        \\---
+    ;
+
+    var project = try parseFile(allocator, content);
+    defer project.deinit();
+
+    const t = project.findTicket(1).?;
+    try testing.expectEqualStrings("Line one.\nLine two.\nLine three.", t.description);
+}
+
+test "parseFile: multiple dependencies" {
+    const allocator = testing.allocator;
+    const content =
+        \\# tckts | prefix: TEST | version: 1
+        \\
+        \\--- TEST-1
+        \\type: task
+        \\status: done
+        \\title: First
+        \\created: 2024-12-23
+        \\---
+        \\
+        \\--- TEST-2
+        \\type: task
+        \\status: done
+        \\title: Second
+        \\created: 2024-12-23
+        \\---
+        \\
+        \\--- TEST-3
+        \\type: task
+        \\status: pending
+        \\title: Third depends on both
+        \\created: 2024-12-23
+        \\depends: TEST-1, TEST-2
+        \\---
+    ;
+
+    var project = try parseFile(allocator, content);
+    defer project.deinit();
+
+    const t3 = project.findTicket(3).?;
+    try testing.expectEqual(@as(usize, 2), t3.depends.len);
+}
