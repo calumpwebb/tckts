@@ -271,22 +271,22 @@ pub const Project = struct {
     pub fn canComplete(self: *const Project, number: u32) ![]const TicketId {
         const ticket = self.findTicket(number) orelse return error.TicketNotFound;
 
-        var blocking = std.ArrayList(TicketId).init(self.allocator);
-        errdefer blocking.deinit();
+        var blocking: std.ArrayList(TicketId) = .empty;
+        errdefer blocking.deinit(self.allocator);
 
         for (ticket.depends) |dep| {
             // Check if dependency is in this project
             if (mem.eql(u8, dep.prefix, self.prefix)) {
                 if (self.findTicket(dep.number)) |dep_ticket| {
                     if (dep_ticket.status != .done) {
-                        try blocking.append(dep);
+                        try blocking.append(self.allocator, dep);
                     }
                 }
             }
             // Cross-project dependencies would need to be checked by the caller
         }
 
-        return blocking.toOwnedSlice();
+        return blocking.toOwnedSlice(self.allocator);
     }
 
     pub fn markDone(self: *Project, number: u32) !void {
@@ -636,15 +636,15 @@ pub fn saveProject(allocator: std.mem.Allocator, project: *const Project) !void 
 
 /// List all projects (prefixes)
 pub fn listProjects(allocator: std.mem.Allocator) ![][]const u8 {
-    var projects = std.ArrayList([]const u8).init(allocator);
+    var projects: std.ArrayList([]const u8) = .empty;
     errdefer {
         for (projects.items) |p| allocator.free(p);
-        projects.deinit();
+        projects.deinit(allocator);
     }
 
     const cwd = fs.cwd();
     var dir = cwd.openDir(tckts_dir, .{ .iterate = true }) catch |e| switch (e) {
-        error.FileNotFound => return projects.toOwnedSlice(),
+        error.FileNotFound => return projects.toOwnedSlice(allocator),
         else => return e,
     };
     defer dir.close();
@@ -655,10 +655,10 @@ pub fn listProjects(allocator: std.mem.Allocator) ![][]const u8 {
         if (!mem.endsWith(u8, entry.name, file_extension)) continue;
 
         const prefix = entry.name[0 .. entry.name.len - file_extension.len];
-        try projects.append(try allocator.dupe(u8, prefix));
+        try projects.append(allocator, try allocator.dupe(u8, prefix));
     }
 
-    return projects.toOwnedSlice();
+    return projects.toOwnedSlice(allocator);
 }
 
 // --- tests ---
