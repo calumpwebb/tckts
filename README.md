@@ -57,7 +57,7 @@ The binary will be at `zig-out/bin/tckts`.
 # Initialize a new project
 tckts init MYPROJECT
 
-# Add some tickets (note: -p is required)
+# Add some tickets (-p defaults to the default project)
 tckts add "User authentication" -p MYPROJECT -t feature
 tckts add "Fix crash on startup" -p MYPROJECT -t bug
 tckts add "Write tests" -p MYPROJECT -t task -d MYPROJECT-1
