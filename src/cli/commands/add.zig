@@ -3,79 +3,97 @@ const std = @import("std");
 const tckts = @import("tckts");
 
 const cli = @import("../mod.zig");
+const arg_parser = cli.arg_parser;
 
 const mem = std.mem;
 
+// --- constants ---
+
+pub const meta = arg_parser.CommandMeta{
+    .name = "add",
+    .usage = "add <title> [options]",
+    .short = "Add a new ticket to a project.",
+    .options = &.{
+        .{ .short = "-p", .long = "--project", .arg = "<PREFIX>", .desc = "Project prefix (uses default if set)" },
+        .{ .short = "-t", .long = "--type", .arg = "<TYPE>", .desc = "bug, feature, task, chore, epic (default: task)" },
+        .{ .short = "-m", .long = "--message", .arg = "<DESC>", .desc = "Ticket description" },
+        .{ .short = "-d", .long = "--depends", .arg = "<IDs>", .desc = "Comma-separated dependency IDs" },
+        .{ .long = "--priority", .arg = "<LEVEL>", .desc = "low, medium, high" },
+    },
+    .examples = &.{
+        "tckts add \"Fix login bug\" -t bug",
+        "tckts add \"Auth feature\" -t feature -d PROJ-1",
+        "tckts add -- \"-h flag not working\"  # title starting with dash",
+    },
+};
+
+// --- types ---
+
 pub fn run(allocator: std.mem.Allocator, args: anytype) !void {
-    var title: ?[]const u8 = null;
-    var prefix: ?[]const u8 = null;
-    var ticket_type: tckts.TicketType = .task;
-    var description: []const u8 = "";
-    var priority: ?tckts.Priority = null;
-    var depends_str: ?[]const u8 = null;
+    var parser = arg_parser.ArgParser(@TypeOf(args.*)).init(allocator, args, meta);
+    defer parser.deinit();
 
-    while (args.next()) |arg| {
-        if (mem.eql(u8, arg, "-p") or mem.eql(u8, arg, "--project")) {
-            prefix = args.next() orelse return error.MissingArgument;
-        } else if (mem.eql(u8, arg, "-t") or mem.eql(u8, arg, "--type")) {
-            const type_str = args.next() orelse return error.MissingArgument;
-            ticket_type = tckts.TicketType.fromString(type_str) orelse {
-                cli.eprint("Error: Invalid type '{s}'. Use: bug, feature, task, chore, epic\n", .{type_str});
-                return error.InvalidArgument;
-            };
-        } else if (mem.eql(u8, arg, "-m") or mem.eql(u8, arg, "--message")) {
-            description = args.next() orelse return error.MissingArgument;
-        } else if (mem.eql(u8, arg, "-d") or mem.eql(u8, arg, "--depends")) {
-            depends_str = args.next() orelse return error.MissingArgument;
-        } else if (mem.eql(u8, arg, "--priority")) {
-            const prio_str = args.next() orelse return error.MissingArgument;
-            priority = tckts.Priority.fromString(prio_str) orelse {
-                cli.eprint("Error: Invalid priority '{s}'. Use: low, medium, high\n", .{prio_str});
-                return error.InvalidArgument;
-            };
-        } else if (!mem.startsWith(u8, arg, "-")) {
-            title = arg;
-        }
-    }
+    parser.parse() catch |err| switch (err) {
+        error.HelpRequested => return,
+        error.UnknownFlag => {
+            cli.eprint("Error: Unknown flag '{s}'.\n", .{parser.errorArg().?});
+            cli.eprint("Run 'tckts add -h' for usage.\n", .{});
+            return error.InvalidArgument;
+        },
+        error.MissingFlagValue => {
+            cli.eprint("Error: Flag '{s}' requires a value.\n", .{parser.errorArg().?});
+            cli.eprint("Run 'tckts add -h' for usage.\n", .{});
+            return error.MissingArgument;
+        },
+        error.OutOfMemory => return error.OutOfMemory,
+    };
 
-    if (title == null) {
+    // Get title (first positional)
+    const title = parser.positional(0) orelse {
         cli.eprint("Error: Missing ticket title.\n", .{});
-        cli.eprint("Usage: tckts add -p <PREFIX> <title>\n", .{});
+        cli.eprint("Usage: tckts {s}\n", .{meta.usage});
         return error.MissingArgument;
-    }
+    };
 
-    // Try default project from config if not specified
+    // Get project prefix (from flag or default)
     var default_project: ?[]u8 = null;
     defer if (default_project) |dp| allocator.free(dp);
 
-    if (prefix == null) {
+    const prefix = parser.get("project") orelse blk: {
         default_project = cli.getDefaultProject(allocator);
         if (default_project) |dp| {
-            prefix = dp;
+            break :blk @as([]const u8, dp);
         } else {
             cli.eprint("Error: Missing required -p/--project flag.\n", .{});
-            const projects = try tckts.listProjects(allocator);
-            defer {
-                for (projects) |p| allocator.free(p);
-                allocator.free(projects);
-            }
-            if (projects.len > 0) {
-                cli.eprint("Available projects: ", .{});
-                for (projects, 0..) |p, i| {
-                    if (i > 0) cli.eprint(", ", .{});
-                    cli.eprint("{s}", .{p});
-                }
-                cli.eprint("\n", .{});
-            } else {
-                cli.eprint("No projects exist. Run 'tckts init <PREFIX>' to create one.\n", .{});
-            }
-            cli.eprint("Usage: tckts add -p <PREFIX> <title>\n", .{});
+            cli.printAvailableProjects(allocator);
+            cli.eprint("Usage: tckts {s}\n", .{meta.usage});
             cli.eprint("Tip: Set a default project in .tckts/config.json\n", .{});
             return error.MissingArgument;
         }
-    }
+    };
 
-    const upper_prefix = try cli.toUpperPrefix(allocator, prefix.?);
+    // Parse ticket type
+    const ticket_type: tckts.TicketType = if (parser.get("type")) |type_str|
+        tckts.TicketType.fromString(type_str) orelse {
+            cli.eprint("Error: Invalid type '{s}'. Use: bug, feature, task, chore, epic\n", .{type_str});
+            return error.InvalidArgument;
+        }
+    else
+        .task;
+
+    // Parse priority
+    const priority: ?tckts.Priority = if (parser.get("priority")) |prio_str|
+        tckts.Priority.fromString(prio_str) orelse {
+            cli.eprint("Error: Invalid priority '{s}'. Use: low, medium, high\n", .{prio_str});
+            return error.InvalidArgument;
+        }
+    else
+        null;
+
+    const description = parser.get("message") orelse "";
+    const depends_str = parser.get("depends");
+
+    const upper_prefix = try cli.toUpperPrefix(allocator, prefix);
     defer allocator.free(upper_prefix);
 
     var project = try cli.loadProjectOrError(allocator, upper_prefix);
@@ -102,8 +120,8 @@ pub fn run(allocator: std.mem.Allocator, args: anytype) !void {
     }
 
     // Validate limits with friendly messages showing actual vs max
-    if (title.?.len > tckts.max_title_length_bytes) {
-        cli.eprint("Error: Title is {d} characters (max {d}).\n", .{ title.?.len, tckts.max_title_length_bytes });
+    if (title.len > tckts.max_title_length_bytes) {
+        cli.eprint("Error: Title is {d} characters (max {d}).\n", .{ title.len, tckts.max_title_length_bytes });
         return error.TitleTooLong;
     }
     if (description.len > tckts.max_description_length_bytes) {
@@ -115,7 +133,7 @@ pub fn run(allocator: std.mem.Allocator, args: anytype) !void {
         return error.TooManyDependencies;
     }
 
-    const ticket = try project.addTicket(ticket_type, title.?, description, depends.items, priority);
+    const ticket = try project.addTicket(ticket_type, title, description, depends.items, priority);
     try tckts.saveProject(allocator, &project);
 
     cli.print("Created {s}-{d}: {s}\n", .{ upper_prefix, ticket.id.number, ticket.title });
