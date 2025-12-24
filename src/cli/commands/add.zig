@@ -23,7 +23,6 @@ pub const meta = arg_parser.CommandMeta{
     .examples = &.{
         "tckts add \"Fix login bug\" -t bug",
         "tckts add \"Auth feature\" -t feature -d PROJ-1",
-        "tckts add -- \"-h flag not working\"  # title starting with dash",
     },
 };
 

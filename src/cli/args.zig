@@ -65,7 +65,6 @@ pub const global_options: []const OptionMeta = &.{
 
 pub const ParseError = error{
     HelpRequested,
-    UnknownFlag,
     MissingFlagValue,
     OutOfMemory,
 };
@@ -119,12 +118,6 @@ pub fn ArgParser(comptime ArgsIterator: type) type {
         pub fn parseOrExit(self: *Self) ParseResult {
             self.parse() catch |err| switch (err) {
                 error.HelpRequested => return .exit,
-                error.UnknownFlag => {
-                    const cli = @import("mod.zig");
-                    cli.eprint("Error: Unknown flag '{s}'.\n", .{self.errorArg().?});
-                    cli.eprint("Run 'tckts {s} -h' for usage.\n", .{self.meta.name});
-                    return .exit;
-                },
                 error.MissingFlagValue => {
                     const cli = @import("mod.zig");
                     cli.eprint("Error: Flag '{s}' requires a value.\n", .{self.errorArg().?});
@@ -160,7 +153,11 @@ pub fn ArgParser(comptime ArgsIterator: type) type {
                 }
 
                 if (mem.startsWith(u8, argument, "-")) {
-                    try self.parseFlag(argument);
+                    // Try to match as flag, otherwise treat as positional
+                    const is_flag = try self.tryParseFlag(argument);
+                    if (!is_flag) {
+                        self.positionals.append(self.allocator, argument) catch return error.OutOfMemory;
+                    }
                 } else {
                     self.positionals.append(self.allocator, argument) catch return error.OutOfMemory;
                 }
@@ -194,7 +191,8 @@ pub fn ArgParser(comptime ArgsIterator: type) type {
             return self.last_error_arg;
         }
 
-        fn parseFlag(self: *Self, argument: []const u8) ParseError!void {
+        /// Try to parse as flag. Returns true if matched, false if should be treated as positional.
+        fn tryParseFlag(self: *Self, argument: []const u8) ParseError!bool {
             // Find matching option in meta
             for (self.meta.options) |opt| {
                 if (opt.matches(argument)) {
@@ -210,13 +208,12 @@ pub fn ArgParser(comptime ArgsIterator: type) type {
                         // Boolean flag
                         self.options.put(self.allocator, name, null) catch return error.OutOfMemory;
                     }
-                    return;
+                    return true;
                 }
             }
 
-            // Unknown flag
-            self.last_error_arg = argument;
-            return error.UnknownFlag;
+            // Doesn't match any known flag - treat as positional
+            return false;
         }
 
         fn printHelp(self: *Self) void {
@@ -460,7 +457,7 @@ test "ArgParser: --help returns HelpRequested" {
     try testing.expectError(error.HelpRequested, result);
 }
 
-test "ArgParser: unknown flag returns error" {
+test "ArgParser: unknown flag treated as positional" {
     const testing = std.testing;
     const allocator = testing.allocator;
 
@@ -468,9 +465,10 @@ test "ArgParser: unknown flag returns error" {
     var parser = TestParser.init(allocator, &iter, test_meta);
     defer parser.deinit();
 
-    const result = parser.parse();
-    try testing.expectError(error.UnknownFlag, result);
-    try testing.expectEqualStrings("--unknown", parser.errorArg().?);
+    try parser.parse();
+
+    // Unknown flags are treated as positionals, not errors
+    try testing.expectEqualStrings("--unknown", parser.positional(0).?);
 }
 
 test "ArgParser: flag without required value returns error" {
@@ -502,16 +500,31 @@ test "ArgParser: mixed flags and positionals in any order" {
     try testing.expectEqualStrings("extra", parser.positional(1).?);
 }
 
-test "ArgParser: title starting with dash after --" {
+test "ArgParser: title starting with dash works without separator" {
     const testing = std.testing;
     const allocator = testing.allocator;
 
-    // This is the original bug - titles starting with - were rejected
-    var iter = TestArgIterator{ .args = &.{ "--", "-h and --help don't work" } };
+    // Titles starting with - that don't match known flags are treated as positionals
+    var iter = TestArgIterator{ .args = &.{"-h and --help don't work"} };
     var parser = TestParser.init(allocator, &iter, test_meta);
     defer parser.deinit();
 
     try parser.parse();
 
     try testing.expectEqualStrings("-h and --help don't work", parser.positional(0).?);
+}
+
+test "ArgParser: -- separator still works for edge cases" {
+    const testing = std.testing;
+    const allocator = testing.allocator;
+
+    // -- still works if you need it (e.g., title that exactly matches a flag)
+    var iter = TestArgIterator{ .args = &.{ "--", "-h" } };
+    var parser = TestParser.init(allocator, &iter, test_meta);
+    defer parser.deinit();
+
+    try parser.parse();
+
+    // -h after -- is treated as positional, not help
+    try testing.expectEqualStrings("-h", parser.positional(0).?);
 }
