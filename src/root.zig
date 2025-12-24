@@ -384,15 +384,35 @@ pub const Project = struct {
         if (ticket.status == .done) return error.AlreadyDone;
 
         ticket.status = .in_progress;
-        if (ticket.started_at) |old| self.allocator.free(old);
-        ticket.started_at = try formatUtcTimestamp(self.allocator);
+
+        // Add to history
+        const timestamp = try formatUtcTimestamp(self.allocator);
+        try self.appendHistory(ticket, .in_progress, timestamp);
     }
 
     pub fn markDone(self: *Project, number: u32) !void {
         const ticket = self.findTicket(number) orelse return error.TicketNotFound;
         ticket.status = .done;
-        if (ticket.completed_at) |old| self.allocator.free(old);
-        ticket.completed_at = try formatUtcTimestamp(self.allocator);
+
+        // Add to history
+        const timestamp = try formatUtcTimestamp(self.allocator);
+        try self.appendHistory(ticket, .done, timestamp);
+    }
+
+    fn appendHistory(self: *Project, ticket: *Ticket, status: Status, timestamp: []const u8) !void {
+        // Grow the history slice
+        const new_len = ticket.history.len + 1;
+        const new_history = try self.allocator.alloc(HistoryEntry, new_len);
+
+        // Copy existing entries
+        @memcpy(new_history[0..ticket.history.len], ticket.history);
+
+        // Add new entry
+        new_history[ticket.history.len] = .{ .status = status, .at = timestamp };
+
+        // Free old history slice and update
+        self.allocator.free(ticket.history);
+        ticket.history = new_history;
     }
 };
 
