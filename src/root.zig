@@ -9,7 +9,7 @@ const testing = std.testing;
 // --- constants ---
 
 const format_version = 1;
-const file_extension = ".jsonl";
+const file_extension = ".tckts";
 const config_filename = "config.json";
 
 pub const default_tckts_dir = ".tckts";
