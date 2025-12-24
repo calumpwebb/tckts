@@ -11,6 +11,7 @@ const testing = std.testing;
 const format_version = 1;
 const tckts_dir = ".tckts";
 const file_extension = ".jsonl";
+const config_filename = "config.json";
 
 // Limits - ensure predictable memory usage and prevent abuse
 
@@ -365,6 +366,73 @@ pub const Project = struct {
         ticket.completed_at = try formatUtcTimestamp(self.allocator);
     }
 };
+
+pub const Config = struct {
+    default_project: ?[]const u8,
+
+    pub fn deinit(self: *Config, allocator: std.mem.Allocator) void {
+        if (self.default_project) |p| allocator.free(p);
+        self.* = undefined;
+    }
+};
+
+const JsonConfig = struct {
+    default_project: ?[]const u8 = null,
+};
+
+pub const ConfigError = error{
+    ConfigNotFound,
+    InvalidConfig,
+};
+
+/// Load config from .tckts/config.json
+pub fn loadConfig(allocator: std.mem.Allocator) ConfigError!Config {
+    const config_path = fmt.allocPrint(allocator, "{s}/{s}", .{ tckts_dir, config_filename }) catch return error.ConfigNotFound;
+    defer allocator.free(config_path);
+
+    const cwd = fs.cwd();
+    const file = cwd.openFile(config_path, .{}) catch return error.ConfigNotFound;
+    defer file.close();
+
+    const content = file.readToEndAlloc(allocator, 4096) catch return error.InvalidConfig;
+    defer allocator.free(content);
+
+    const parsed = json.parseFromSlice(JsonConfig, allocator, content, .{}) catch return error.InvalidConfig;
+    defer parsed.deinit();
+
+    const default_project: ?[]u8 = if (parsed.value.default_project) |p|
+        allocator.dupe(u8, p) catch return error.InvalidConfig
+    else
+        null;
+
+    return Config{ .default_project = default_project };
+}
+
+/// Save config to .tckts/config.json
+pub fn saveConfig(allocator: std.mem.Allocator, config: *const Config) !void {
+    const config_path = try fmt.allocPrint(allocator, "{s}/{s}", .{ tckts_dir, config_filename });
+    defer allocator.free(config_path);
+
+    const cwd = fs.cwd();
+
+    // Ensure .tckts directory exists
+    cwd.makeDir(tckts_dir) catch |e| switch (e) {
+        error.PathAlreadyExists => {},
+        else => return e,
+    };
+
+    const file = try cwd.createFile(config_path, .{});
+    defer file.close();
+
+    const json_options = json.Stringify.Options{ .emit_null_optional_fields = false };
+    const json_content = try json.Stringify.valueAlloc(allocator, JsonConfig{
+        .default_project = config.default_project,
+    }, json_options);
+    defer allocator.free(json_content);
+
+    try file.writeAll(json_content);
+    try file.writeAll("\n");
+}
 
 pub const ParseError = error{
     InvalidHeader,

@@ -44,6 +44,17 @@ pub fn printAvailableProjects(allocator: std.mem.Allocator) void {
     }
 }
 
+/// Get default project from config, returns null if not configured
+pub fn getDefaultProject(allocator: std.mem.Allocator) ?[]u8 {
+    var config = tckts.loadConfig(allocator) catch return null;
+    defer config.deinit(allocator);
+
+    if (config.default_project) |p| {
+        return allocator.dupe(u8, p) catch return null;
+    }
+    return null;
+}
+
 /// Convert a prefix string to uppercase, allocating a new buffer
 pub fn toUpperPrefix(allocator: std.mem.Allocator, prefix: []const u8) ![]u8 {
     var upper = try allocator.alloc(u8, prefix.len);

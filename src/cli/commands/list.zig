@@ -23,25 +23,35 @@ pub fn run(allocator: std.mem.Allocator, args: anytype) !void {
         }
     }
 
+    // Try default project from config if not specified
+    var default_project: ?[]u8 = null;
+    defer if (default_project) |dp| allocator.free(dp);
+
     if (prefix == null) {
-        cli.eprint("Error: Missing required project prefix.\n", .{});
-        const projects = try tckts.listProjects(allocator);
-        defer {
-            for (projects) |p| allocator.free(p);
-            allocator.free(projects);
-        }
-        if (projects.len > 0) {
-            cli.eprint("Available projects: ", .{});
-            for (projects, 0..) |p, i| {
-                if (i > 0) cli.eprint(", ", .{});
-                cli.eprint("{s}", .{p});
-            }
-            cli.eprint("\n", .{});
+        default_project = cli.getDefaultProject(allocator);
+        if (default_project) |dp| {
+            prefix = dp;
         } else {
-            cli.eprint("No projects exist. Run 'tckts init <PREFIX>' to create one.\n", .{});
+            cli.eprint("Error: Missing required project prefix.\n", .{});
+            const projects = try tckts.listProjects(allocator);
+            defer {
+                for (projects) |p| allocator.free(p);
+                allocator.free(projects);
+            }
+            if (projects.len > 0) {
+                cli.eprint("Available projects: ", .{});
+                for (projects, 0..) |p, i| {
+                    if (i > 0) cli.eprint(", ", .{});
+                    cli.eprint("{s}", .{p});
+                }
+                cli.eprint("\n", .{});
+            } else {
+                cli.eprint("No projects exist. Run 'tckts init <PREFIX>' to create one.\n", .{});
+            }
+            cli.eprint("Usage: tckts list <PREFIX>\n", .{});
+            cli.eprint("Tip: Set a default project in .tckts/config.json\n", .{});
+            return error.MissingArgument;
         }
-        cli.eprint("Usage: tckts list <PREFIX>\n", .{});
-        return error.MissingArgument;
     }
 
     const upper_prefix = try cli.toUpperPrefix(allocator, prefix.?);
