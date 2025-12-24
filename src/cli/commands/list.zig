@@ -19,18 +19,20 @@ pub fn run(allocator: std.mem.Allocator, args: anytype) !void {
             show_blocked = true;
         } else if (mem.eql(u8, arg, "-s") or mem.eql(u8, arg, "--status")) {
             const status_str = args.next() orelse {
-                cli.eprint("Error: --status requires a value (pending, in-progress, done)\n", .{});
+                cli.eprint("Error: --status requires a value (pending, in-progress, blocked, done)\n", .{});
                 return error.MissingArgument;
             };
             if (mem.eql(u8, status_str, "pending")) {
                 status_filter = .pending;
             } else if (mem.eql(u8, status_str, "in-progress") or mem.eql(u8, status_str, "in_progress")) {
                 status_filter = .in_progress;
+            } else if (mem.eql(u8, status_str, "blocked")) {
+                status_filter = .blocked;
             } else if (mem.eql(u8, status_str, "done")) {
                 status_filter = .done;
                 show_all = true;
             } else {
-                cli.eprint("Error: Invalid status '{s}'. Use: pending, in-progress, done\n", .{status_str});
+                cli.eprint("Error: Invalid status '{s}'. Use: pending, in-progress, blocked, done\n", .{status_str});
                 return error.InvalidArgument;
             }
         } else if (!mem.startsWith(u8, arg, "-")) {
@@ -96,9 +98,14 @@ pub fn run(allocator: std.mem.Allocator, args: anytype) !void {
         defer allocator.free(blocking);
         const is_blocked = blocking.len > 0;
 
-        if (show_blocked and !is_blocked) continue;
+        // For --blocked flag, show both explicit blocked status and dependency-blocked
+        if (show_blocked and ticket.status != .blocked and !is_blocked) continue;
 
-        const status_char: u8 = if (ticket.status == .done) 'x' else ' ';
+        const status_char: u8 = switch (ticket.status) {
+            .done => 'x',
+            .blocked => 'B',
+            else => ' ',
+        };
 
         cli.print("[{c}] {s}-{d} | {s} | {s}", .{
             status_char,
@@ -108,7 +115,8 @@ pub fn run(allocator: std.mem.Allocator, args: anytype) !void {
             ticket.title,
         });
 
-        if (is_blocked) cli.print(" [BLOCKED]", .{});
+        // Show [BLOCKED] for explicit blocked status or dependency-blocked
+        if (ticket.status == .blocked or is_blocked) cli.print(" [BLOCKED]", .{});
 
         if (ticket.priority) |p| {
             const prio: []const u8 = switch (p) {

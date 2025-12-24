@@ -7,7 +7,7 @@ A minimal, plain-text ticket tracker for the command line. No databases, no serv
 - **Plain text storage** - Files are readable and editable by hand
 - **Multi-project support** - Organize tickets by project prefix (e.g., BACKEND-1, UI-23)
 - **Ticket types** - Categorize as bug, feature, task, chore, or epic
-- **Status workflow** - pending → in-progress → done with timestamps
+- **Status workflow** - pending → in-progress → blocked → done with timestamps
 - **Dependencies** - Define which tickets block others
 - **Zero dependencies** - Built with Zig stdlib only
 
@@ -130,7 +130,7 @@ List tickets in a project.
 tckts list [PREFIX] [--all] [--status <STATUS>] [--blocked]
 ```
 
-By default shows only pending tickets. Use `--all` to show all tickets, or `--status` to filter by status (pending, in-progress, done).
+By default shows only pending tickets. Use `--all` to show all tickets, or `--status` to filter by status (pending, in-progress, blocked, done).
 
 ### show
 
@@ -214,7 +214,7 @@ The first line is the project header. Each subsequent line is a ticket.
 |-------|----------|-------------|
 | id | Yes | Ticket ID (PREFIX-NUMBER) |
 | type | Yes | bug, feature, task, chore, or epic |
-| status | Yes | pending, in_progress, or done |
+| status | Yes | pending, in_progress, blocked, or done |
 | title | Yes | Short summary (max 280 chars) |
 | created_at | Yes | UTC timestamp (ISO 8601) |
 | started_at | No | When moved to in_progress |

@@ -162,7 +162,7 @@ fn printHelp() void {
         \\        List tickets for a project.
         \\        Options:
         \\          -a, --all                Show all tickets (including completed)
-        \\          -s, --status <STATUS>    Filter by status (pending, in-progress, done)
+        \\          -s, --status <STATUS>    Filter by status (pending, in-progress, blocked, done)
         \\          --blocked                Show only blocked tickets
         \\        Example: tckts list BACKEND --status in-progress
         \\

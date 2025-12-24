@@ -128,11 +128,13 @@ pub const TicketType = enum {
 pub const Status = enum {
     pending,
     in_progress,
+    blocked,
     done,
 
     pub fn fromString(s: []const u8) ?Status {
         if (mem.eql(u8, s, "pending")) return .pending;
         if (mem.eql(u8, s, "in_progress")) return .in_progress;
+        if (mem.eql(u8, s, "blocked")) return .blocked;
         if (mem.eql(u8, s, "done")) return .done;
         return null;
     }
@@ -141,6 +143,7 @@ pub const Status = enum {
         return switch (self) {
             .pending => "pending",
             .in_progress => "in_progress",
+            .blocked => "blocked",
             .done => "done",
         };
     }

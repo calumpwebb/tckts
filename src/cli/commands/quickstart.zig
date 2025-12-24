@@ -165,20 +165,23 @@ pub fn run(allocator: std.mem.Allocator) !void {
 
         var pending: usize = 0;
         var in_progress: usize = 0;
+        var blocked_count: usize = 0;
         var done_count: usize = 0;
 
         for (project.tickets.items) |ticket| {
             switch (ticket.status) {
                 .pending => pending += 1,
                 .in_progress => in_progress += 1,
+                .blocked => blocked_count += 1,
                 .done => done_count += 1,
             }
         }
 
-        cli.print("{s}: {d} pending, {d} in-progress, {d} completed\n", .{
+        cli.print("{s}: {d} pending, {d} in-progress, {d} blocked, {d} completed\n", .{
             prefix,
             pending,
             in_progress,
+            blocked_count,
             done_count,
         });
     }
