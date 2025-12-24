@@ -150,9 +150,9 @@ tckts help [command]                Show help
 
 **list:**
 ```
--a, --all                 Show all tickets (including completed)
---pending                 Show only pending tickets (default)
---blocked                 Show only blocked tickets
+-a, --all                    Show all tickets (including completed)
+-s, --status <STATUS>        Filter by status (pending, in_progress, done)
+--blocked                    Show only blocked tickets
 ```
 
 ### Exit Codes

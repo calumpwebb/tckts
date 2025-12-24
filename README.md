@@ -127,10 +127,10 @@ tckts add "New module" -p API -t epic -d "API-1, API-2"
 List tickets in a project.
 
 ```bash
-tckts list [PREFIX] [--all | --pending | --blocked]
+tckts list [PREFIX] [--all] [--status <STATUS>] [--blocked]
 ```
 
-By default shows only pending tickets. Use `--all` to show all tickets.
+By default shows only pending tickets. Use `--all` to show all tickets, or `--status` to filter by status (pending, in_progress, done).
 
 ### show
 
@@ -142,7 +142,7 @@ tckts show <TICKET-ID>
 
 ### start
 
-Mark a ticket as in-progress.
+Mark a ticket as in_progress.
 
 ```bash
 tckts start <TICKET-ID>

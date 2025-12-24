@@ -161,17 +161,17 @@ fn printHelp() void {
         \\    list <PREFIX> [options]
         \\        List tickets for a project.
         \\        Options:
-        \\          -a, --all       Show all tickets (including completed)
-        \\          --pending       Show only pending tickets (default)
-        \\          --blocked       Show only blocked tickets
-        \\        Example: tckts list BACKEND --all
+        \\          -a, --all                Show all tickets (including completed)
+        \\          -s, --status <STATUS>    Filter by status (pending, in_progress, done)
+        \\          --blocked                Show only blocked tickets
+        \\        Example: tckts list BACKEND --status in_progress
         \\
         \\    show <ID>
         \\        Show detailed information about a ticket.
         \\        Example: tckts show BACKEND-1
         \\
         \\    start <ID>
-        \\        Mark a ticket as in-progress.
+        \\        Mark a ticket as in_progress.
         \\        Records the started_at timestamp.
         \\        Example: tckts start BACKEND-1
         \\

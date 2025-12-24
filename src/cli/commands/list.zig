@@ -19,18 +19,18 @@ pub fn run(allocator: std.mem.Allocator, args: anytype) !void {
             show_blocked = true;
         } else if (mem.eql(u8, arg, "-s") or mem.eql(u8, arg, "--status")) {
             const status_str = args.next() orelse {
-                cli.eprint("Error: --status requires a value (pending, in-progress, done)\n", .{});
+                cli.eprint("Error: --status requires a value (pending, in_progress, done)\n", .{});
                 return error.MissingArgument;
             };
             if (mem.eql(u8, status_str, "pending")) {
                 status_filter = .pending;
-            } else if (mem.eql(u8, status_str, "in-progress") or mem.eql(u8, status_str, "in_progress")) {
+            } else if (mem.eql(u8, status_str, "in_progress")) {
                 status_filter = .in_progress;
             } else if (mem.eql(u8, status_str, "done")) {
                 status_filter = .done;
                 show_all = true;
             } else {
-                cli.eprint("Error: Invalid status '{s}'. Use: pending, in-progress, done\n", .{status_str});
+                cli.eprint("Error: Invalid status '{s}'. Use: pending, in_progress, done\n", .{status_str});
                 return error.InvalidArgument;
             }
         } else if (!mem.startsWith(u8, arg, "-")) {
