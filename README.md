@@ -100,7 +100,7 @@ tckts add <title> -p <PREFIX> [options]
 
 **Options:**
 
-- `-p, --project <PREFIX>` - Project prefix (required)
+- `-p, --project <PREFIX>` - Project prefix (optional if default is set)
 - `-t, --type <TYPE>` - Ticket type: bug, feature, task, chore, epic
 - `-d, --depends <IDs>` - Comma-separated dependency IDs
 - `-m, --message <DESC>` - Ticket description
