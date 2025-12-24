@@ -4,6 +4,6 @@ pub const list = @import("list.zig");
 pub const show = @import("show.zig");
 pub const start = @import("start.zig");
 pub const done = @import("done.zig");
-pub const rm = @import("rm.zig");
+pub const remove = @import("remove.zig");
 pub const projects = @import("projects.zig");
 pub const quickstart = @import("quickstart.zig");

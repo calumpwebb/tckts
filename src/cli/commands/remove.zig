@@ -5,7 +5,7 @@ const tckts = @import("tckts");
 const cli = @import("../mod.zig");
 
 pub fn run(allocator: std.mem.Allocator, args: anytype) !void {
-    var ticket_id = try cli.parseTicketIdArg(allocator, args, "rm");
+    var ticket_id = try cli.parseTicketIdArg(allocator, args, "remove");
     defer ticket_id.deinit(allocator);
 
     var project = try cli.loadProjectOrError(allocator, ticket_id.prefix);

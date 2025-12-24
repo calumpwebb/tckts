@@ -39,7 +39,7 @@
 {"id":"TCKTS-39","type":"feature","status":"done","title":"Create installation method for tckts CLI","created_at":"2025-12-24T03:56:52Z","started_at":"2025-12-24T04:18:41Z","completed_at":"2025-12-24T04:20:04Z"}
 {"id":"TCKTS-40","type":"feature","status":"pending","title":"Add self-update command for tckts","created_at":"2025-12-24T03:56:52Z"}
 {"id":"TCKTS-41","type":"feature","status":"done","title":"Add releasing skill for automated version bumps, builds, and GitHub releases","created_at":"2025-12-24T04:28:24Z","started_at":"2025-12-24T04:28:31Z","completed_at":"2025-12-24T04:29:27Z"}
-{"id":"TCKTS-42","type":"bug","status":"pending","title":"list command treats --status flag value as project name instead of parsing flag","created_at":"2025-12-24T06:54:53Z"}
+{"id":"TCKTS-42","type":"bug","status":"in_progress","title":"list command treats --status flag value as project name instead of parsing flag","created_at":"2025-12-24T06:54:53Z","started_at":"2025-12-24T07:39:55Z"}
 {"id":"TCKTS-43","type":"feature","status":"pending","title":"Allow configurable config file location (not just .tckts/config.json)","created_at":"2025-12-24T07:01:07Z"}
 {"id":"TCKTS-44","type":"feature","status":"done","title":"Allow configurable ticket storage directory (not just .tckts/)","created_at":"2025-12-24T07:01:07Z","started_at":"2025-12-24T07:08:55Z","completed_at":"2025-12-24T07:13:40Z"}
 {"id":"TCKTS-45","type":"task","status":"done","title":"Add comprehensive e2e tests covering all CLI use cases","created_at":"2025-12-24T07:05:54Z","started_at":"2025-12-24T07:16:04Z","completed_at":"2025-12-24T07:36:50Z","depends":["TCKTS-44"],"priority":"high"}
@@ -48,3 +48,4 @@
 {"id":"TCKTS-48","type":"task","status":"pending","title":"Update e2e tests for edit command workflow","created_at":"2025-12-24T07:24:05Z","depends":["TCKTS-47"]}
 {"id":"TCKTS-49","type":"task","status":"done","title":"Move project metadata (prefix, version) from .tckts file header to config.json","created_at":"2025-12-24T07:25:14Z","started_at":"2025-12-24T07:25:20Z","completed_at":"2025-12-24T07:35:33Z"}
 {"id":"TCKTS-50","type":"task","status":"pending","title":"Update e2e tests to use --json output for assertions","created_at":"2025-12-24T07:26:22Z","depends":["TCKTS-46"]}
+{"id":"TCKTS-51","type":"chore","status":"done","title":"Change rm command alias to remove","created_at":"2025-12-24T07:38:09Z","started_at":"2025-12-24T07:38:14Z","completed_at":"2025-12-24T07:39:49Z"}

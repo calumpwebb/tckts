@@ -100,7 +100,7 @@ fn run(allocator: std.mem.Allocator) !void {
         .show => try commands.show.run(allocator, &args),
         .start => try commands.start.run(allocator, &args),
         .done => try commands.done.run(allocator, &args),
-        .rm => try commands.rm.run(allocator, &args),
+        .remove => try commands.remove.run(allocator, &args),
         .projects => try commands.projects.run(allocator),
         .quickstart => try commands.quickstart.run(allocator),
         .version => cli.print("tckts v{s}\n", .{version}),
@@ -121,7 +121,7 @@ fn printUsage() void {
         \\  show <ID>         Show ticket details
         \\  start <ID>        Mark ticket as in-progress
         \\  done <ID>         Mark ticket as complete
-        \\  rm <ID>           Remove a ticket
+        \\  remove <ID>       Remove a ticket
         \\  projects          List all projects
         \\  quickstart        LLM onboarding guide <- LLMs RUN THIS
         \\  version           Show version
@@ -180,9 +180,9 @@ fn printHelp() void {
         \\        Fails if the ticket has incomplete dependencies.
         \\        Example: tckts done BACKEND-1
         \\
-        \\    rm <ID>
-        \\        Remove a ticket. Also removes it from dependency lists.
-        \\        Example: tckts rm BACKEND-1
+        \\    remove <ID>
+        \\        Remove a ticket permanently.
+        \\        Example: tckts remove BACKEND-1
         \\
         \\    projects
         \\        List all initialized projects.

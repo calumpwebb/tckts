@@ -99,7 +99,7 @@ pub const Command = enum {
     show,
     start,
     done,
-    rm,
+    remove,
     projects,
     quickstart,
     version,
@@ -115,9 +115,9 @@ pub const Command = enum {
             .{ "start", Command.start },
             .{ "done", Command.done },
             .{ "complete", Command.done },
-            .{ "rm", Command.rm },
-            .{ "delete", Command.rm },
-            .{ "remove", Command.rm },
+            .{ "rm", Command.remove },
+            .{ "delete", Command.remove },
+            .{ "remove", Command.remove },
             .{ "projects", Command.projects },
             .{ "quickstart", Command.quickstart },
             .{ "version", Command.version },
@@ -149,8 +149,8 @@ test "Command: fromString" {
     try testing.expectEqual(Command.start, Command.fromString("start").?);
     try testing.expectEqual(Command.done, Command.fromString("done").?);
     try testing.expectEqual(Command.done, Command.fromString("complete").?);
-    try testing.expectEqual(Command.rm, Command.fromString("rm").?);
-    try testing.expectEqual(Command.rm, Command.fromString("delete").?);
+    try testing.expectEqual(Command.remove, Command.fromString("rm").?);
+    try testing.expectEqual(Command.remove, Command.fromString("delete").?);
     try testing.expectEqual(Command.projects, Command.fromString("projects").?);
     try testing.expectEqual(Command.quickstart, Command.fromString("quickstart").?);
     try testing.expectEqual(Command.version, Command.fromString("version").?);
