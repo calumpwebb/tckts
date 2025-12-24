@@ -10,14 +10,29 @@ pub fn run(allocator: std.mem.Allocator, args: anytype) !void {
     var prefix: ?[]const u8 = null;
     var show_all = false;
     var show_blocked = false;
+    var status_filter: ?tckts.Status = null;
 
     while (args.next()) |arg| {
         if (mem.eql(u8, arg, "-a") or mem.eql(u8, arg, "--all")) {
             show_all = true;
-        } else if (mem.eql(u8, arg, "--pending")) {
-            show_all = false;
         } else if (mem.eql(u8, arg, "--blocked")) {
             show_blocked = true;
+        } else if (mem.eql(u8, arg, "-s") or mem.eql(u8, arg, "--status")) {
+            const status_str = args.next() orelse {
+                cli.eprint("Error: --status requires a value (pending, in-progress, done)\n", .{});
+                return error.MissingArgument;
+            };
+            if (mem.eql(u8, status_str, "pending")) {
+                status_filter = .pending;
+            } else if (mem.eql(u8, status_str, "in-progress") or mem.eql(u8, status_str, "in_progress")) {
+                status_filter = .in_progress;
+            } else if (mem.eql(u8, status_str, "done")) {
+                status_filter = .done;
+                show_all = true;
+            } else {
+                cli.eprint("Error: Invalid status '{s}'. Use: pending, in-progress, done\n", .{status_str});
+                return error.InvalidArgument;
+            }
         } else if (!mem.startsWith(u8, arg, "-")) {
             prefix = arg;
         }
@@ -71,6 +86,11 @@ pub fn run(allocator: std.mem.Allocator, args: anytype) !void {
     var displayed: usize = 0;
     for (project.tickets.items) |ticket| {
         if (!show_all and ticket.status == .done) continue;
+
+        // Filter by status if specified
+        if (status_filter) |sf| {
+            if (ticket.status != sf) continue;
+        }
 
         const blocking = try project.canComplete(ticket.id.number);
         defer allocator.free(blocking);
