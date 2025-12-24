@@ -33,7 +33,6 @@ Download the binary for your platform from [GitHub Releases](https://github.com/
 | macOS (Intel) | `tckts-macos-x86_64` |
 | Linux (x86_64) | `tckts-linux-x86_64` |
 | Linux (ARM64) | `tckts-linux-aarch64` |
-| Windows | `tckts-windows-x86_64.exe` |
 
 Then make it executable and move to your PATH:
 

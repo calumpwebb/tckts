@@ -38,7 +38,6 @@ detect_os() {
     case "$(uname -s)" in
         Darwin) echo "macos" ;;
         Linux) echo "linux" ;;
-        MINGW*|MSYS*|CYGWIN*) echo "windows" ;;
         *) error "Unsupported operating system: $(uname -s)" ;;
     esac
 }
@@ -94,14 +93,8 @@ main() {
     info "Latest version: ${version}"
 
     # Build download URL
-    # Binary naming: tckts-<os>-<arch> (or .exe for windows)
-    if [ "$os" = "windows" ]; then
-        binary_name="tckts-${os}-${arch}.exe"
-        target_name="tckts.exe"
-    else
-        binary_name="tckts-${os}-${arch}"
-        target_name="tckts"
-    fi
+    binary_name="tckts-${os}-${arch}"
+    target_name="tckts"
 
     download_url="https://github.com/${REPO}/releases/download/${version}/${binary_name}"
 

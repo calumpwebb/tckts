@@ -119,10 +119,6 @@ mv zig-out/bin/tckts tckts-macos-x86_64
 
 zig build -Doptimize=ReleaseFast -Dtarget=aarch64-macos
 mv zig-out/bin/tckts tckts-macos-aarch64
-
-# Windows
-zig build -Doptimize=ReleaseFast -Dtarget=x86_64-windows
-mv zig-out/bin/tckts.exe tckts-windows-x86_64.exe
 ```
 
 **If any build fails, stop immediately.** Show the error, do not proceed.
@@ -178,4 +174,3 @@ Report success with link to the release.
 | Linux ARM64 | `tckts-linux-aarch64` |
 | macOS Intel | `tckts-macos-x86_64` |
 | macOS Apple Silicon | `tckts-macos-aarch64` |
-| Windows | `tckts-windows-x86_64.exe` |
