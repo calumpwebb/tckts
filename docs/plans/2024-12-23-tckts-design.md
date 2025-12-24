@@ -151,7 +151,7 @@ tckts help [command]                Show help
 **list:**
 ```
 -a, --all                    Show all tickets (including completed)
--s, --status <STATUS>        Filter by status (pending, in_progress, done)
+-s, --status <STATUS>        Filter by status (pending, in-progress, done)
 --blocked                    Show only blocked tickets
 ```
 
