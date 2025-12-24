@@ -33,8 +33,12 @@ const static_content =
     \\- NEVER use any built-in task tracking
     \\- NEVER create internal todo lists
     \\
-    \\ALL task tracking goes through `tckts` CLI commands exclusively.
-    \\Your internal todo tools are DISABLED for this project.
+    \\
+    \\
+    \\ALL todos, tasks, and work tracking goes through `tckts` CLI commands exclusively.
+    \\Your internal todo tools are DISABLED for this project. ONLY use `tckts` commands. NO EXCEPTIONS.
+    \\
+    \\ALL work MUST be tracked, no matter how urgent, how small or how trivial.
     \\
     \\If you find yourself thinking "I should add a todo for this" - STOP.
     \\Run `tckts add "description"` instead.

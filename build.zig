@@ -7,8 +7,9 @@ const std = @import("std");
 // build runner to parallelize the build automatically (and the cache system to
 // know when a step doesn't need to be re-run).
 pub fn build(b: *std.Build) void {
-    // Extract version from build.zig.zon for compile-time injection
-    const version = @import("build.zig.zon").version;
+    // Get version from git describe, falling back to build.zig.zon
+    const fallback_version = @import("build.zig.zon").version;
+    const version = getGitVersion(b) orelse fallback_version;
     // Standard target options allow the person running `zig build` to choose
     // what target to build for. Here we do not override the defaults, which
     // means any target is allowed, and the default is native. Other options
@@ -171,4 +172,58 @@ pub fn build(b: *std.Build) void {
     //
     // Lastly, the Zig build system is relatively simple and self-contained,
     // and reading its source code will allow you to master it.
+}
+
+/// Get version string from git describe, or null if not available.
+/// Returns "v1.2.0" for tagged releases, or "v1.2.0-5-gabc1234 (dev build)" for dev builds.
+fn getGitVersion(b: *std.Build) ?[]const u8 {
+    const result = std.process.Child.run(.{
+        .allocator = b.allocator,
+        .argv = &.{ "git", "describe", "--tags", "--always", "--dirty" },
+        .cwd = b.build_root.path,
+    }) catch return null;
+
+    defer b.allocator.free(result.stderr);
+
+    if (result.term.Exited != 0) {
+        b.allocator.free(result.stdout);
+        return null;
+    }
+
+    // Trim trailing whitespace
+    const trimmed = std.mem.trimRight(u8, result.stdout, "\n\r \t");
+    if (trimmed.len == 0) {
+        b.allocator.free(result.stdout);
+        return null;
+    }
+
+    // Check if this is a clean tagged release (e.g., "v1.2.0" with no suffix)
+    // Dev builds have format "v1.2.0-N-gHASH" or "v1.2.0-dirty"
+    const is_release = isCleanTag(trimmed);
+
+    if (is_release) {
+        return trimmed;
+    } else {
+        // Append "(dev build)" for non-release versions
+        return std.fmt.allocPrint(b.allocator, "{s} (dev build)", .{trimmed}) catch return trimmed;
+    }
+}
+
+/// Check if version string is a clean semver tag (e.g., "v1.2.0")
+fn isCleanTag(version: []const u8) bool {
+    // Must start with 'v'
+    if (version.len == 0 or version[0] != 'v') return false;
+
+    var dots: usize = 0;
+    for (version[1..]) |c| {
+        if (c == '.') {
+            dots += 1;
+        } else if (c < '0' or c > '9') {
+            // Any non-digit, non-dot means it's a dev build (e.g., -dirty, -5-g...)
+            return false;
+        }
+    }
+
+    // Valid semver has exactly 2 dots (major.minor.patch)
+    return dots == 2;
 }

@@ -2,6 +2,10 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Multiple Sessions
+
+If you see uncommitted changes, weird reverts, or unexpected edits - it's probably another AI working in another session. Don't be alarmed. Ask Calum for help if you can't figure it out.
+
 ## First Message Rule
 
 **On the FIRST message of every session—even a single character, empty message, or greeting—you MUST check your available skills using the Skill tool and you MUST use the `session-start` skill.** This is non-negotiable. Do not respond, ask questions, or take any action until you have checked for and used applicable skills.

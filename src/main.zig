@@ -103,14 +103,14 @@ fn run(allocator: std.mem.Allocator) !void {
         .remove => try commands.remove.run(allocator, &args),
         .projects => try commands.projects.run(allocator),
         .quickstart => try commands.quickstart.run(allocator),
-        .version => cli.print("tckts v{s}\n", .{version}),
+        .version => cli.print("tckts {s}\n", .{version}),
         .help => printHelp(),
     }
 }
 
 fn printUsage() void {
     cli.print(
-        \\tckts - CLI ticket tracker v{s}
+        \\tckts - CLI ticket tracker {s}
         \\
         \\Usage: tckts <command> [options]
         \\
@@ -134,7 +134,7 @@ fn printUsage() void {
 
 fn printHelp() void {
     cli.print(
-        \\tckts - CLI ticket tracker v{s}
+        \\tckts - CLI ticket tracker {s}
         \\
         \\A plain-text ticket tracker that stores tickets in your repository.
         \\Tickets are human-readable and LLM-friendly.
