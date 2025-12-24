@@ -29,10 +29,23 @@ gh auth status  # Must be logged in
 git describe --tags --abbrev=0 2>/dev/null || echo "first release"
 ```
 
+### README Review
+
+Read `README.md` and verify it reflects the current state of the project:
+- Features listed match what's actually implemented
+- Installation instructions are correct
+- Usage examples work with current CLI
+- No stale/outdated information
+
+→ **AskUserQuestion**: "README.md looks [up to date / needs updates]. Proceed with release?"
+  - If needs updates: list specific issues found
+  - Options: Proceed / Update README first
+
 **Stop conditions:**
 - Dirty working tree → hard stop, ask to commit/stash first
 - gh not authenticated → hard stop, show `gh auth login`
 - Not on main → warn but allow override via AskUserQuestion
+- README needs updates → warn and allow override, or stop to update first
 
 ## Workflow
 

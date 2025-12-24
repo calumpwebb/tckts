@@ -1,6 +1,6 @@
 # tckts
 
-A minimal, plain-text ticket tracker for the command line. No databases, no JSON, no YAML - just human-readable text files.
+A minimal, plain-text ticket tracker for the command line. No databases, no servers - just JSONL files in your repo.
 
 ## Features
 
@@ -89,7 +89,7 @@ Initialize a new project with a prefix.
 tckts init <PREFIX>
 ```
 
-Creates `.tckts/<PREFIX>.tckts` file.
+Creates `.tckts/<PREFIX>.jsonl` file.
 
 ### add
 
@@ -198,34 +198,15 @@ tckts help
 
 ## File Format
 
-Tickets are stored in `.tckts/<PREFIX>.tckts` files using a simple block format:
+Tickets are stored in `.tckts/<PREFIX>.jsonl` files using [JSON Lines](https://jsonlines.org/) format - one JSON object per line:
 
+```jsonl
+{"prefix":"MYPROJECT","version":1}
+{"id":"MYPROJECT-1","type":"feature","status":"in_progress","title":"User authentication","created_at":"2024-12-23T10:30:45Z","started_at":"2024-12-23T14:00:00Z","priority":"high","description":"Implement OAuth2 login flow with support for Google and GitHub providers."}
+{"id":"MYPROJECT-2","type":"bug","status":"done","title":"Fix crash on startup","created_at":"2024-12-23T10:30:45Z","completed_at":"2024-12-23T16:00:00Z","depends":["MYPROJECT-1"]}
 ```
-# tckts | prefix: MYPROJECT | version: 1
 
----
-id: MYPROJECT-1
-type: feature
-status: in_progress
-title: User authentication
-created_at: 2024-12-23T10:30:45Z
-started_at: 2024-12-23T14:00:00Z
-priority: high
-
-Implement OAuth2 login flow with support for
-Google and GitHub providers.
----
-
----
-id: MYPROJECT-2
-type: bug
-status: done
-title: Fix crash on startup
-created_at: 2024-12-23T10:30:45Z
-completed_at: 2024-12-23T16:00:00Z
-depends: MYPROJECT-1
----
-```
+The first line is the project header. Each subsequent line is a ticket.
 
 ### Fields
 
@@ -238,9 +219,9 @@ depends: MYPROJECT-1
 | created_at | Yes | UTC timestamp (ISO 8601) |
 | started_at | No | When moved to in_progress |
 | completed_at | No | When marked as done |
-| depends | No | Comma-separated list of ticket IDs |
+| depends | No | Array of ticket IDs |
 | priority | No | low, medium, or high |
-| description | No | Free-form text after blank line |
+| description | No | Free-form text description |
 
 ### Limits
 

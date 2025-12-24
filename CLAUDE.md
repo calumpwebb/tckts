@@ -27,7 +27,7 @@ zig build -Doptimize=ReleaseFast -p /usr/local  # Build and install to /usr/loca
 
 1. **Core Library** (`src/root.zig`) - Data structures, file I/O, project/ticket operations
    - `Ticket`, `TicketId`, `Project` structs
-   - `parseFile()` / `serializeProject()` for the `.tckts` file format
+   - `parseFile()` / `serializeProject()` for JSONL storage
    - Validation (title max 280 chars, description max 64KB, max 10K tickets)
 
 2. **CLI Layer** (`src/cli/mod.zig`) - Command parsing, I/O helpers, dispatch utilities
@@ -41,19 +41,10 @@ zig build -Doptimize=ReleaseFast -p /usr/local  # Build and install to /usr/loca
 
 ### Data Storage
 
-Projects stored in `.tckts/PREFIX.tckts` files using a human-readable format:
-```
-# tckts | prefix: TODO | version: 1
-
----
-id: TODO-1
-type: task
-status: pending
-title: Example ticket
-created_at: 2024-12-23T10:30:45Z
-priority: medium
-depends: OTHER-1
----
+Projects stored in `.tckts/PREFIX.jsonl` files using [JSON Lines](https://jsonlines.org/) format:
+```jsonl
+{"prefix":"TODO","version":1}
+{"id":"TODO-1","type":"task","status":"pending","title":"Example ticket","created_at":"2024-12-23T10:30:45Z","priority":"medium","depends":["OTHER-1"]}
 ```
 
 ## Zig Code Conventions
