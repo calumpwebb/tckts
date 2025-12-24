@@ -1,0 +1,21 @@
+#!/bin/sh
+# Pre-commit hook: Format Zig files
+
+# Get staged .zig files
+STAGED_ZIG_FILES=$(git diff --cached --name-only --diff-filter=ACM | grep '\.zig$')
+
+if [ -n "$STAGED_ZIG_FILES" ]; then
+    echo "Formatting Zig files..."
+
+    # Format each staged file
+    for file in $STAGED_ZIG_FILES; do
+        if [ -f "$file" ]; then
+            zig fmt "$file"
+            git add "$file"
+        fi
+    done
+
+    echo "Zig formatting complete."
+fi
+
+exit 0

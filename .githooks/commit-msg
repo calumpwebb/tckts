@@ -1,0 +1,74 @@
+#!/bin/sh
+# Commit-msg hook: Validate Conventional Commits format
+#
+# Format: <type>[optional scope][!]: <description>
+#
+# Types: feat, fix, chore, docs, refactor, test, perf, ci, build, style
+# Scope: optional, in parentheses
+# Breaking: optional !, indicates breaking change
+# Description: imperative mood, no period at end
+
+COMMIT_MSG_FILE=$1
+COMMIT_MSG=$(cat "$COMMIT_MSG_FILE")
+
+# Get first line (subject)
+SUBJECT=$(echo "$COMMIT_MSG" | head -n1)
+
+# Skip merge commits
+if echo "$SUBJECT" | grep -qE "^Merge "; then
+    exit 0
+fi
+
+# Skip revert commits
+if echo "$SUBJECT" | grep -qE "^Revert "; then
+    exit 0
+fi
+
+# Define valid types
+TYPES="feat|fix|chore|docs|refactor|test|perf|ci|build|style"
+
+# Regex pattern for conventional commits
+# <type>[(scope)][!]: <description>
+PATTERN="^($TYPES)(\([a-zA-Z0-9_-]+\))?!?: .+"
+
+if ! echo "$SUBJECT" | grep -qE "$PATTERN"; then
+    echo ""
+    echo "ERROR: Commit message does not follow Conventional Commits format."
+    echo ""
+    echo "Expected format: <type>[(scope)][!]: <description>"
+    echo ""
+    echo "Valid types: feat, fix, chore, docs, refactor, test, perf, ci, build, style"
+    echo ""
+    echo "Examples:"
+    echo "  feat: add user authentication"
+    echo "  fix(api): handle null response"
+    echo "  chore(deps): update dependencies"
+    echo "  feat!: remove deprecated API"
+    echo ""
+    echo "Your commit message:"
+    echo "  $SUBJECT"
+    echo ""
+    exit 1
+fi
+
+# Check subject length (should be under 72, ideally under 50)
+SUBJECT_LENGTH=${#SUBJECT}
+if [ "$SUBJECT_LENGTH" -gt 72 ]; then
+    echo ""
+    echo "WARNING: Commit subject exceeds 72 characters ($SUBJECT_LENGTH chars)."
+    echo "Consider keeping it under 50 characters for best readability."
+    echo ""
+fi
+
+# Check for trailing period
+if echo "$SUBJECT" | grep -qE "\.$"; then
+    echo ""
+    echo "ERROR: Commit subject should not end with a period."
+    echo ""
+    echo "Your commit message:"
+    echo "  $SUBJECT"
+    echo ""
+    exit 1
+fi
+
+exit 0
