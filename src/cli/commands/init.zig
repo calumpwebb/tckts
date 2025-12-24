@@ -3,11 +3,33 @@ const std = @import("std");
 const tckts = @import("tckts");
 
 const cli = @import("../mod.zig");
+const arg_parser = cli.arg_parser;
+
+// --- constants ---
+
+pub const meta = arg_parser.CommandMeta{
+    .name = "init",
+    .usage = "init <PREFIX>",
+    .short = "Initialize a new project with the given prefix.",
+    .options = &.{},
+    .examples = &.{
+        "tckts init BACKEND",
+        "tckts init API",
+    },
+};
+
+// --- types ---
 
 pub fn run(allocator: std.mem.Allocator, args: anytype) !void {
-    const prefix = args.next() orelse {
+    var parser = arg_parser.ArgParser(@TypeOf(args.*)).init(allocator, args, meta);
+    defer parser.deinit();
+
+    if (parser.parseOrExit() == .exit) return;
+
+    // Get prefix (first positional)
+    const prefix = parser.positional(0) orelse {
         cli.eprint("Error: Missing project prefix.\n", .{});
-        cli.eprint("Usage: tckts init <PREFIX>\n", .{});
+        cli.eprint("Usage: tckts {s}\n", .{meta.usage});
         return error.MissingArgument;
     };
 
