@@ -1,0 +1,6 @@
+{"id":"TEST-1","type":"task","status":"pending","title":"Pending ticket","created_at":"2025-12-24T19:51:26Z"}
+{"id":"TEST-2","type":"feature","status":"pending","title":"Another pending","created_at":"2025-12-24T19:51:26Z","description":"Has a description"}
+{"id":"TEST-3","type":"bug","status":"in_progress","title":"Started ticket","created_at":"2025-12-24T19:51:26Z","started_at":"2025-12-24T19:51:26Z","priority":"high"}
+{"id":"TEST-4","type":"chore","status":"done","title":"Done ticket","created_at":"2025-12-24T19:51:26Z","started_at":"2025-12-24T19:51:26Z","completed_at":"2025-12-24T19:51:26Z"}
+{"id":"TEST-5","type":"task","status":"pending","title":"Ticket with deps","created_at":"2025-12-24T19:51:26Z","depends":["TEST-1","TEST-2"]}
+{"id":"TEST-6","type":"feature","status":"pending","title":"Blocked ticket","created_at":"2025-12-24T19:51:26Z"}
