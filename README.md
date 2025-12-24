@@ -13,13 +13,40 @@ A minimal, plain-text ticket tracker for the command line. No databases, no JSON
 
 ## Installation
 
+### Quick Install (Recommended)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/calumpwebb/tckts/main/install.sh | sh
+```
+
+This downloads the latest release binary for your platform and installs it to `~/.local/bin`.
+
+To update, run the same command again.
+
+### Manual Download
+
+Download the binary for your platform from [GitHub Releases](https://github.com/calumpwebb/tckts/releases):
+
+| Platform | Binary |
+|----------|--------|
+| macOS (Apple Silicon) | `tckts-macos-aarch64` |
+| macOS (Intel) | `tckts-macos-x86_64` |
+| Linux (x86_64) | `tckts-linux-x86_64` |
+| Linux (ARM64) | `tckts-linux-aarch64` |
+| Windows | `tckts-windows-x86_64.exe` |
+
+Then make it executable and move to your PATH:
+
+```bash
+chmod +x tckts-*
+mv tckts-* ~/.local/bin/tckts
+```
+
+### Build from Source
+
 Requires [Zig 0.15](https://ziglang.org/download/) or later.
 
 ```bash
-# Build
-zig build
-
-# Or build optimized release
 zig build -Doptimize=ReleaseFast
 ```
 
