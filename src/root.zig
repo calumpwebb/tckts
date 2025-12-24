@@ -1,6 +1,7 @@
 const std = @import("std");
 
 const fs = std.fs;
+const json = std.json;
 const mem = std.mem;
 const fmt = std.fmt;
 const testing = std.testing;
@@ -9,7 +10,7 @@ const testing = std.testing;
 
 const format_version = 1;
 const tckts_dir = ".tckts";
-const file_extension = ".tckts";
+const file_extension = ".jsonl";
 
 // --- limits ---
 // These limits ensure predictable memory usage and prevent abuse
@@ -66,52 +67,7 @@ fn formatUtcTimestamp(allocator: std.mem.Allocator) ![]u8 {
     return allocator.dupe(u8, timestamp_str);
 }
 
-/// Escape description content to prevent format injection
-fn escapeDescription(allocator: std.mem.Allocator, description: []const u8) ![]u8 {
-    // Escape lines starting with "---" by prefixing with a backslash
-    var result: std.ArrayList(u8) = .empty;
-    errdefer result.deinit(allocator);
-
-    var lines = mem.splitSequence(u8, description, "\n");
-    var first = true;
-    while (lines.next()) |line| {
-        if (!first) try result.append(allocator, '\n');
-        first = false;
-
-        const trimmed = mem.trimLeft(u8, line, " \t");
-        if (mem.startsWith(u8, trimmed, "---")) {
-            try result.append(allocator, '\\');
-        }
-        try result.appendSlice(allocator, line);
-    }
-
-    return result.toOwnedSlice(allocator);
-}
-
-/// Unescape description content
-fn unescapeDescription(allocator: std.mem.Allocator, escaped: []const u8) ![]u8 {
-    var result: std.ArrayList(u8) = .empty;
-    errdefer result.deinit(allocator);
-
-    var lines = mem.splitSequence(u8, escaped, "\n");
-    var first = true;
-    while (lines.next()) |line| {
-        if (!first) try result.append(allocator, '\n');
-        first = false;
-
-        // Unescape lines that start with \---
-        const trimmed = mem.trimLeft(u8, line, " \t");
-        const leading_spaces = line.len - trimmed.len;
-        if (mem.startsWith(u8, trimmed, "\\---")) {
-            try result.appendSlice(allocator, line[0..leading_spaces]);
-            try result.appendSlice(allocator, trimmed[1..]);
-        } else {
-            try result.appendSlice(allocator, line);
-        }
-    }
-
-    return result.toOwnedSlice(allocator);
-}
+// JSONL format uses standard JSON - no escaping needed
 
 // --- types ---
 
@@ -414,11 +370,12 @@ pub const Project = struct {
 
 pub const ParseError = error{
     InvalidHeader,
-    InvalidTicketBlock,
+    InvalidTicket,
     InvalidTicketId,
     MissingRequiredField,
     OutOfMemory,
     InvalidFormat,
+    InvalidJson,
 };
 
 pub const FileError = error{
@@ -435,164 +392,94 @@ pub const ValidationError = error{
     PrefixTooLong,
 };
 
-/// Parse a .tckts file into a Project
+// JSON structures for parsing JSONL format
+const JsonHeader = struct {
+    prefix: []const u8,
+    version: u32,
+};
+
+const JsonTicket = struct {
+    id: []const u8,
+    type: []const u8,
+    status: []const u8,
+    title: []const u8,
+    created_at: []const u8,
+    started_at: ?[]const u8 = null,
+    completed_at: ?[]const u8 = null,
+    depends: ?[]const []const u8 = null,
+    priority: ?[]const u8 = null,
+    description: ?[]const u8 = null,
+};
+
+/// Parse a JSONL file into a Project
+/// Format: Line 1 = header JSON, subsequent lines = ticket JSON objects
 pub fn parseFile(allocator: std.mem.Allocator, content: []const u8) ParseError!Project {
     var lines = mem.splitSequence(u8, content, "\n");
 
-    // Parse header
-    const header = lines.next() orelse return error.InvalidHeader;
-    const prefix = parseHeader(header) orelse return error.InvalidHeader;
+    // Parse header (first line)
+    const header_line = lines.next() orelse return error.InvalidHeader;
+    if (header_line.len == 0) return error.InvalidHeader;
 
-    var project = Project.init(allocator, prefix) catch return error.OutOfMemory;
+    const header = json.parseFromSlice(JsonHeader, allocator, header_line, .{}) catch {
+        return error.InvalidJson;
+    };
+    defer header.deinit();
+
+    if (header.value.version != format_version) return error.InvalidHeader;
+
+    var project = Project.init(allocator, header.value.prefix) catch return error.OutOfMemory;
     errdefer project.deinit();
 
-    // Parse ticket blocks - blocks are delimited by --- lines
-    var in_block = false;
-    var block_start: usize = 0;
-    var pos: usize = header.len + 1;
-
+    // Parse ticket lines
     while (lines.next()) |line| {
-        const trimmed = mem.trim(u8, line, " \t");
+        const trimmed = mem.trim(u8, line, " \t\r");
+        if (trimmed.len == 0) continue;
 
-        // Check for block delimiter (--- but not escaped \---)
-        if (mem.eql(u8, trimmed, "---")) {
-            if (in_block) {
-                // End of block - process it
-                const block_content = content[block_start .. pos + line.len];
-                const ticket = parseTicketBlock(allocator, block_content, prefix) catch |e| {
-                    return e;
-                };
-                project.tickets.append(allocator, ticket) catch return error.OutOfMemory;
-                if (ticket.id.number >= project.next_number) {
-                    project.next_number = ticket.id.number + 1;
-                }
-                in_block = false;
-            } else {
-                // Start of block
-                in_block = true;
-                block_start = pos;
-            }
+        const ticket = parseTicketJson(allocator, trimmed, project.prefix) catch |e| {
+            return e;
+        };
+        project.tickets.append(allocator, ticket) catch return error.OutOfMemory;
+        if (ticket.id.number >= project.next_number) {
+            project.next_number = ticket.id.number + 1;
         }
-        pos += line.len + 1;
     }
 
     return project;
 }
 
-fn parseHeader(line: []const u8) ?[]const u8 {
-    // Expected: # tckts | prefix: <PREFIX> | version: 1
-    if (!mem.startsWith(u8, line, "# tckts")) return null;
+fn parseTicketJson(allocator: std.mem.Allocator, line: []const u8, expected_prefix: []const u8) ParseError!Ticket {
+    const parsed = json.parseFromSlice(JsonTicket, allocator, line, .{}) catch {
+        return error.InvalidJson;
+    };
+    defer parsed.deinit();
 
-    var parts = mem.splitSequence(u8, line, "|");
-    _ = parts.next(); // Skip "# tckts"
-
-    var prefix: ?[]const u8 = null;
-    var version_ok = false;
-
-    while (parts.next()) |part| {
-        const trimmed = mem.trim(u8, part, " \t");
-        if (mem.startsWith(u8, trimmed, "prefix:")) {
-            prefix = mem.trim(u8, trimmed["prefix:".len..], " \t");
-        } else if (mem.startsWith(u8, trimmed, "version:")) {
-            const ver_str = mem.trim(u8, trimmed["version:".len..], " \t");
-            const ver = fmt.parseInt(u32, ver_str, 10) catch continue;
-            version_ok = (ver == format_version);
-        }
-    }
-
-    if (prefix != null and version_ok) return prefix;
-    return null;
-}
-
-fn parseTicketBlock(allocator: std.mem.Allocator, block: []const u8, expected_prefix: []const u8) ParseError!Ticket {
-    var lines = mem.splitSequence(u8, block, "\n");
-
-    // First line: --- (block separator)
-    const first_line = lines.next() orelse return error.InvalidTicketBlock;
-    const trimmed_first = mem.trim(u8, first_line, " \t");
-    if (!mem.startsWith(u8, trimmed_first, "---")) return error.InvalidTicketBlock;
-
-    // Parse metadata lines until empty line
-    var id_str: ?[]const u8 = null;
-    var ticket_type: ?TicketType = null;
-    var status: ?Status = null;
-    var title: ?[]const u8 = null;
-    var created_at: ?[]const u8 = null;
-    var started_at: ?[]const u8 = null;
-    var completed_at: ?[]const u8 = null;
-    var depends_str: ?[]const u8 = null;
-    var priority: ?Priority = null;
-    var in_description = false;
-    var description_lines: std.ArrayList([]const u8) = .empty;
-    defer description_lines.deinit(allocator);
-
-    while (lines.next()) |line| {
-        const trimmed = mem.trim(u8, line, " \t");
-
-        // Check for end of block marker (but not escaped \---)
-        if (mem.startsWith(u8, trimmed, "---") and !mem.startsWith(u8, trimmed, "\\---")) break;
-
-        if (in_description) {
-            description_lines.append(allocator, line) catch return error.OutOfMemory;
-            continue;
-        }
-
-        if (trimmed.len == 0) {
-            in_description = true;
-            continue;
-        }
-
-        // Parse metadata
-        if (mem.startsWith(u8, trimmed, "id:")) {
-            id_str = mem.trim(u8, trimmed["id:".len..], " \t");
-        } else if (mem.startsWith(u8, trimmed, "type:")) {
-            const val = mem.trim(u8, trimmed["type:".len..], " \t");
-            ticket_type = TicketType.fromString(val);
-        } else if (mem.startsWith(u8, trimmed, "status:")) {
-            const val = mem.trim(u8, trimmed["status:".len..], " \t");
-            status = Status.fromString(val);
-        } else if (mem.startsWith(u8, trimmed, "title:")) {
-            title = mem.trim(u8, trimmed["title:".len..], " \t");
-        } else if (mem.startsWith(u8, trimmed, "created_at:")) {
-            created_at = mem.trim(u8, trimmed["created_at:".len..], " \t");
-        } else if (mem.startsWith(u8, trimmed, "started_at:")) {
-            started_at = mem.trim(u8, trimmed["started_at:".len..], " \t");
-        } else if (mem.startsWith(u8, trimmed, "completed_at:")) {
-            completed_at = mem.trim(u8, trimmed["completed_at:".len..], " \t");
-        } else if (mem.startsWith(u8, trimmed, "depends:")) {
-            depends_str = mem.trim(u8, trimmed["depends:".len..], " \t");
-        } else if (mem.startsWith(u8, trimmed, "priority:")) {
-            const val = mem.trim(u8, trimmed["priority:".len..], " \t");
-            priority = Priority.fromString(val);
-        }
-    }
-
-    // Validate required fields
-    if (id_str == null or ticket_type == null or status == null or title == null or created_at == null) {
-        return error.MissingRequiredField;
-    }
+    const jt = parsed.value;
 
     // Parse and validate ID
-    var id = TicketId.parse(allocator, id_str.?) catch return error.InvalidTicketId;
+    var id = TicketId.parse(allocator, jt.id) catch return error.InvalidTicketId;
     errdefer id.deinit(allocator);
 
     // Verify prefix matches
     if (!mem.eql(u8, id.prefix, expected_prefix)) return error.InvalidTicketId;
 
+    // Parse type and status
+    const ticket_type = TicketType.fromString(jt.type) orelse return error.InvalidTicket;
+    const status = Status.fromString(jt.status) orelse return error.InvalidTicket;
+
     // Copy strings
-    const title_copy = allocator.dupe(u8, title.?) catch return error.OutOfMemory;
+    const title_copy = allocator.dupe(u8, jt.title) catch return error.OutOfMemory;
     errdefer allocator.free(title_copy);
 
-    const created_at_copy = allocator.dupe(u8, created_at.?) catch return error.OutOfMemory;
+    const created_at_copy = allocator.dupe(u8, jt.created_at) catch return error.OutOfMemory;
     errdefer allocator.free(created_at_copy);
 
-    const started_at_copy: ?[]u8 = if (started_at) |s|
+    const started_at_copy: ?[]u8 = if (jt.started_at) |s|
         allocator.dupe(u8, s) catch return error.OutOfMemory
     else
         null;
     errdefer if (started_at_copy) |s| allocator.free(s);
 
-    const completed_at_copy: ?[]u8 = if (completed_at) |c|
+    const completed_at_copy: ?[]u8 = if (jt.completed_at) |c|
         allocator.dupe(u8, c) catch return error.OutOfMemory
     else
         null;
@@ -605,100 +492,112 @@ fn parseTicketBlock(allocator: std.mem.Allocator, block: []const u8, expected_pr
         depends.deinit(allocator);
     }
 
-    if (depends_str) |ds| {
-        var dep_parts = mem.splitSequence(u8, ds, ",");
-        while (dep_parts.next()) |dep_str| {
-            const dep_trimmed = mem.trim(u8, dep_str, " \t");
-            if (dep_trimmed.len == 0) continue;
-            const dep_id = TicketId.parse(allocator, dep_trimmed) catch return error.InvalidTicketId;
+    if (jt.depends) |deps| {
+        for (deps) |dep_str| {
+            const dep_id = TicketId.parse(allocator, dep_str) catch return error.InvalidTicketId;
             depends.append(allocator, dep_id) catch return error.OutOfMemory;
         }
     }
 
-    // Build description
-    var desc_builder: std.ArrayList(u8) = .empty;
-    errdefer desc_builder.deinit(allocator);
+    // Parse priority
+    const priority: ?Priority = if (jt.priority) |p| Priority.fromString(p) else null;
 
-    for (description_lines.items, 0..) |desc_line, i| {
-        if (i > 0) desc_builder.append(allocator, '\n') catch return error.OutOfMemory;
-        desc_builder.appendSlice(allocator, desc_line) catch return error.OutOfMemory;
-    }
-
-    // Trim trailing whitespace from description
-    const desc_slice = desc_builder.toOwnedSlice(allocator) catch return error.OutOfMemory;
-    defer allocator.free(desc_slice);
-
-    const desc_trimmed = mem.trimRight(u8, desc_slice, " \t\n");
-
-    // Unescape description content
-    const unescaped_desc = unescapeDescription(allocator, desc_trimmed) catch return error.OutOfMemory;
+    // Copy description
+    const description = if (jt.description) |d|
+        allocator.dupe(u8, d) catch return error.OutOfMemory
+    else
+        allocator.dupe(u8, "") catch return error.OutOfMemory;
 
     return Ticket{
         .id = id,
-        .ticket_type = ticket_type.?,
-        .status = status.?,
+        .ticket_type = ticket_type,
+        .status = status,
         .title = title_copy,
         .created_at = created_at_copy,
         .started_at = started_at_copy,
         .completed_at = completed_at_copy,
         .depends = depends.toOwnedSlice(allocator) catch return error.OutOfMemory,
         .priority = priority,
-        .description = unescaped_desc,
+        .description = description,
     };
 }
 
-/// Serialize a Project to .tckts file format
+/// Serialize a Project to JSONL format
+/// Line 1: header, subsequent lines: tickets sorted by created_at
 pub fn serializeProject(allocator: std.mem.Allocator, project: *const Project) ![]u8 {
     var buffer: std.ArrayList(u8) = .empty;
     errdefer buffer.deinit(allocator);
 
     const writer = buffer.writer(allocator);
 
-    // Write header
-    try writer.print("# tckts | prefix: {s} | version: {d}\n", .{ project.prefix, format_version });
+    // Write header as JSON
+    const json_options = json.Stringify.Options{ .emit_null_optional_fields = false };
+    const header_json = try json.Stringify.valueAlloc(allocator, .{ .prefix = project.prefix, .version = format_version }, json_options);
+    defer allocator.free(header_json);
+    try writer.writeAll(header_json);
+    try writer.writeAll("\n");
+
+    // Sort tickets by created_at (ascending) for deterministic output
+    const sorted_indices = try allocator.alloc(usize, project.tickets.items.len);
+    defer allocator.free(sorted_indices);
+    for (sorted_indices, 0..) |*idx, i| {
+        idx.* = i;
+    }
+
+    mem.sort(usize, sorted_indices, project.tickets.items, struct {
+        pub fn lessThan(tickets: []const Ticket, a: usize, b: usize) bool {
+            return mem.lessThan(u8, tickets[a].created_at, tickets[b].created_at);
+        }
+    }.lessThan);
 
     // Write tickets
-    for (project.tickets.items) |ticket| {
-        try writer.writeAll("\n---\n");
-        try writer.print("id: {s}-{d}\n", .{ ticket.id.prefix, ticket.id.number });
-        try writer.print("type: {s}\n", .{ticket.ticket_type.toString()});
-        try writer.print("status: {s}\n", .{ticket.status.toString()});
-        try writer.print("title: {s}\n", .{ticket.title});
-        try writer.print("created_at: {s}\n", .{ticket.created_at});
-
-        if (ticket.started_at) |s| {
-            try writer.print("started_at: {s}\n", .{s});
-        }
-
-        if (ticket.completed_at) |c| {
-            try writer.print("completed_at: {s}\n", .{c});
-        }
-
-        if (ticket.depends.len > 0) {
-            try writer.writeAll("depends: ");
-            for (ticket.depends, 0..) |dep, i| {
-                if (i > 0) try writer.writeAll(", ");
-                try writer.print("{s}-{d}", .{ dep.prefix, dep.number });
-            }
-            try writer.writeAll("\n");
-        }
-
-        if (ticket.priority) |p| {
-            try writer.print("priority: {s}\n", .{p.toString()});
-        }
-
-        if (ticket.description.len > 0) {
-            try writer.writeAll("\n");
-            const escaped = try escapeDescription(allocator, ticket.description);
-            defer allocator.free(escaped);
-            try writer.writeAll(escaped);
-            try writer.writeAll("\n");
-        }
-
-        try writer.writeAll("---\n");
+    for (sorted_indices) |idx| {
+        const ticket = project.tickets.items[idx];
+        try writeTicketJson(allocator, writer, ticket, json_options);
+        try writer.writeAll("\n");
     }
 
     return buffer.toOwnedSlice(allocator);
+}
+
+fn writeTicketJson(allocator: std.mem.Allocator, writer: anytype, ticket: Ticket, options: json.Stringify.Options) !void {
+    // Build depends array as strings
+    var depends_strs: ?[][]const u8 = null;
+    defer if (depends_strs) |ds| allocator.free(ds);
+
+    if (ticket.depends.len > 0) {
+        var dep_list = try allocator.alloc([]const u8, ticket.depends.len);
+        for (ticket.depends, 0..) |dep, i| {
+            // Format as "PREFIX-N"
+            dep_list[i] = try fmt.allocPrint(allocator, "{s}-{d}", .{ dep.prefix, dep.number });
+        }
+        depends_strs = dep_list;
+    }
+    defer if (depends_strs) |ds| {
+        for (ds) |s| allocator.free(s);
+    };
+
+    // Format ticket ID
+    const id_str = try fmt.allocPrint(allocator, "{s}-{d}", .{ ticket.id.prefix, ticket.id.number });
+    defer allocator.free(id_str);
+
+    // Build JSON object with proper field ordering
+    const json_ticket = .{
+        .id = id_str,
+        .type = ticket.ticket_type.toString(),
+        .status = ticket.status.toString(),
+        .title = ticket.title,
+        .created_at = ticket.created_at,
+        .started_at = ticket.started_at,
+        .completed_at = ticket.completed_at,
+        .depends = depends_strs,
+        .priority = if (ticket.priority) |p| p.toString() else null,
+        .description = if (ticket.description.len > 0) ticket.description else null,
+    };
+
+    const ticket_json = try json.Stringify.valueAlloc(allocator, json_ticket, options);
+    defer allocator.free(ticket_json);
+    try writer.writeAll(ticket_json);
 }
 
 /// Get the path to the .tckts directory
@@ -908,32 +807,12 @@ test "Project: remove ticket" {
     try testing.expectEqual(@as(u32, 2), project.tickets.items[0].id.number);
 }
 
-test "parseFile: valid file" {
+test "parseFile: valid JSONL file" {
     const allocator = testing.allocator;
     const content =
-        \\# tckts | prefix: TEST | version: 1
-        \\
-        \\---
-        \\id: TEST-1
-        \\type: feature
-        \\status: done
-        \\title: First ticket
-        \\created_at: 2024-12-23T10:30:00Z
-        \\
-        \\This is the description.
-        \\---
-        \\
-        \\---
-        \\id: TEST-2
-        \\type: bug
-        \\status: pending
-        \\title: Second ticket
-        \\created_at: 2024-12-23T10:30:00Z
-        \\depends: TEST-1
-        \\priority: high
-        \\
-        \\Another description.
-        \\---
+        \\{"prefix":"TEST","version":1}
+        \\{"id":"TEST-1","type":"feature","status":"done","title":"First ticket","created_at":"2024-12-23T10:30:00Z","description":"This is the description."}
+        \\{"id":"TEST-2","type":"bug","status":"pending","title":"Second ticket","created_at":"2024-12-23T10:30:00Z","depends":["TEST-1"],"priority":"high","description":"Another description."}
     ;
 
     var project = try parseFile(allocator, content);
@@ -993,36 +872,36 @@ test "serializeProject: roundtrip" {
 
 test "parseFile: invalid header - missing prefix" {
     const allocator = testing.allocator;
-    const content = "# tckts | version: 1\n";
-    try testing.expectError(error.InvalidHeader, parseFile(allocator, content));
+    const content =
+        \\{"version":1}
+    ;
+    try testing.expectError(error.InvalidJson, parseFile(allocator, content));
 }
 
 test "parseFile: invalid header - missing version" {
     const allocator = testing.allocator;
-    const content = "# tckts | prefix: TEST\n";
-    try testing.expectError(error.InvalidHeader, parseFile(allocator, content));
+    const content =
+        \\{"prefix":"TEST"}
+    ;
+    try testing.expectError(error.InvalidJson, parseFile(allocator, content));
 }
 
 test "parseFile: invalid header - wrong version" {
     const allocator = testing.allocator;
-    const content = "# tckts | prefix: TEST | version: 999\n";
+    const content =
+        \\{"prefix":"TEST","version":999}
+    ;
     try testing.expectError(error.InvalidHeader, parseFile(allocator, content));
 }
 
 test "parseFile: missing required field" {
     const allocator = testing.allocator;
     const content =
-        \\# tckts | prefix: TEST | version: 1
-        \\
-        \\---
-        \\id: TEST-1
-        \\type: feature
-        \\status: done
-        \\created_at: 2024-12-23T10:30:00Z
-        \\---
+        \\{"prefix":"TEST","version":1}
+        \\{"id":"TEST-1","type":"feature","status":"done","created_at":"2024-12-23T10:30:00Z"}
     ;
-    // Missing title field
-    try testing.expectError(error.MissingRequiredField, parseFile(allocator, content));
+    // Missing title field - JSON parser will reject
+    try testing.expectError(error.InvalidJson, parseFile(allocator, content));
 }
 
 test "Project: canComplete with no dependencies" {
@@ -1186,7 +1065,8 @@ test "serializeProject: empty project" {
     const serialized = try serializeProject(allocator, &project);
     defer allocator.free(serialized);
 
-    try testing.expectEqualStrings("# tckts | prefix: EMPTY | version: 1\n", serialized);
+    // JSONL header only
+    try testing.expectEqualStrings("{\"prefix\":\"EMPTY\",\"version\":1}\n", serialized);
 
     var parsed = try parseFile(allocator, serialized);
     defer parsed.deinit();
@@ -1198,15 +1078,8 @@ test "serializeProject: empty project" {
 test "parseFile: ticket with empty description" {
     const allocator = testing.allocator;
     const content =
-        \\# tckts | prefix: TEST | version: 1
-        \\
-        \\---
-        \\id: TEST-1
-        \\type: task
-        \\status: pending
-        \\title: No description ticket
-        \\created_at: 2024-12-23T10:30:00Z
-        \\---
+        \\{"prefix":"TEST","version":1}
+        \\{"id":"TEST-1","type":"task","status":"pending","title":"No description ticket","created_at":"2024-12-23T10:30:00Z"}
     ;
 
     var project = try parseFile(allocator, content);
@@ -1219,19 +1092,8 @@ test "parseFile: ticket with empty description" {
 test "parseFile: ticket with multiline description" {
     const allocator = testing.allocator;
     const content =
-        \\# tckts | prefix: TEST | version: 1
-        \\
-        \\---
-        \\id: TEST-1
-        \\type: feature
-        \\status: pending
-        \\title: Multi-line description
-        \\created_at: 2024-12-23T10:30:00Z
-        \\
-        \\Line one.
-        \\Line two.
-        \\Line three.
-        \\---
+        \\{"prefix":"TEST","version":1}
+        \\{"id":"TEST-1","type":"feature","status":"pending","title":"Multi-line description","created_at":"2024-12-23T10:30:00Z","description":"Line one.\nLine two.\nLine three."}
     ;
 
     var project = try parseFile(allocator, content);
@@ -1244,32 +1106,10 @@ test "parseFile: ticket with multiline description" {
 test "parseFile: multiple dependencies" {
     const allocator = testing.allocator;
     const content =
-        \\# tckts | prefix: TEST | version: 1
-        \\
-        \\---
-        \\id: TEST-1
-        \\type: task
-        \\status: done
-        \\title: First
-        \\created_at: 2024-12-23T10:30:00Z
-        \\---
-        \\
-        \\---
-        \\id: TEST-2
-        \\type: task
-        \\status: done
-        \\title: Second
-        \\created_at: 2024-12-23T10:30:00Z
-        \\---
-        \\
-        \\---
-        \\id: TEST-3
-        \\type: task
-        \\status: pending
-        \\title: Third depends on both
-        \\created_at: 2024-12-23T10:30:00Z
-        \\depends: TEST-1, TEST-2
-        \\---
+        \\{"prefix":"TEST","version":1}
+        \\{"id":"TEST-1","type":"task","status":"done","title":"First","created_at":"2024-12-23T10:30:00Z"}
+        \\{"id":"TEST-2","type":"task","status":"done","title":"Second","created_at":"2024-12-23T10:30:00Z"}
+        \\{"id":"TEST-3","type":"task","status":"pending","title":"Third depends on both","created_at":"2024-12-23T10:30:00Z","depends":["TEST-1","TEST-2"]}
     ;
 
     var project = try parseFile(allocator, content);

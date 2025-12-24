@@ -7,7 +7,8 @@ const process = std.process;
 
 // --- constants ---
 
-const version = "1.0.1";
+// TODO(TCKTS-36): Inject from build.zig.zon at compile time. Until then, keep in sync manually.
+const version = "1.1.0";
 
 // --- main ---
 

@@ -2,6 +2,10 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## First Message Rule
+
+**On the FIRST message of every session—even a single character, empty message, or greeting—you MUST check your available skills using the Skill tool.** This is non-negotiable. Do not respond, ask questions, or take any action until you have checked for applicable skills.
+
 ## Build & Test Commands
 
 ```bash

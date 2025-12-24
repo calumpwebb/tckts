@@ -40,6 +40,7 @@ zig build run -- quickstart
 ## Why This Matters
 
 The quickstart output tells you:
+
 - How to use tckts for tracking work
 - That internal todo tools are DISABLED
 - The workflow you MUST follow
