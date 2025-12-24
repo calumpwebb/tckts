@@ -3,8 +3,6 @@ zig-out/
 zig-cache/
 .zig-cache/
 
-# tckts data directory (for testing)
-.tckts/
 
 # Editor
 .vscode/
