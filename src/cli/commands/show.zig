@@ -25,14 +25,6 @@ pub fn run(allocator: std.mem.Allocator, args: anytype) !void {
     cli.print("Status:   {s}\n", .{ticket.status.toString()});
     cli.print("Created:  {s}\n", .{ticket.created_at});
 
-    if (ticket.started_at) |s| {
-        cli.print("Started:  {s}\n", .{s});
-    }
-
-    if (ticket.completed_at) |c| {
-        cli.print("Done:     {s}\n", .{c});
-    }
-
     if (ticket.priority) |p| {
         cli.print("Priority: {s}\n", .{p.toString()});
     }
@@ -44,6 +36,13 @@ pub fn run(allocator: std.mem.Allocator, args: anytype) !void {
             cli.print("{s}-{d}", .{ dep.prefix, dep.number });
         }
         cli.print("\n", .{});
+    }
+
+    if (ticket.history.len > 0) {
+        cli.print("\nHistory:\n", .{});
+        for (ticket.history) |entry| {
+            cli.print("  {s: <12} {s}\n", .{ entry.status.toString(), entry.at });
+        }
     }
 
     if (ticket.description.len > 0) {

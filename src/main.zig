@@ -5,6 +5,7 @@ const tckts = @import("tckts");
 
 const cli = @import("cli/mod.zig");
 const commands = @import("cli/commands/mod.zig");
+const migrations = @import("migrations.zig");
 
 const process = std.process;
 
@@ -69,6 +70,10 @@ pub fn main() !void {
                 cli.eprint("Error: Prefix too long (max {d} characters).\n", .{tckts.max_prefix_length_bytes});
                 process.exit(exit_code_error);
             },
+            error.MigrationFailed => {
+                // Error message already printed by migration
+                process.exit(exit_code_error);
+            },
             else => {
                 cli.eprint("Error: {any}\n", .{err});
                 process.exit(exit_code_internal);
@@ -93,6 +98,25 @@ fn run(allocator: std.mem.Allocator) !void {
         return error.UnknownCommand;
     };
 
+    // Run any pending migrations before every command
+    // Migration errors are non-fatal for init command (no projects yet)
+    const is_force_migrate = cmd == .migrate and hasForceFlag(&args);
+    _ = migrations.runPendingMigrations(allocator, is_force_migrate) catch |err| {
+        switch (err) {
+            migrations.MigrationError.NotGitRepo, migrations.MigrationError.UncommittedChanges => {
+                // Error message already printed
+                return error.MigrationFailed;
+            },
+            else => {
+                // For IoError on init, it's fine - no projects exist yet
+                if (cmd != .init) {
+                    cli.eprint("Error: Migration failed.\n", .{});
+                    return error.MigrationFailed;
+                }
+            },
+        }
+    };
+
     switch (cmd) {
         .init => try commands.init.run(allocator, &args),
         .add => try commands.add.run(allocator, &args),
@@ -103,9 +127,21 @@ fn run(allocator: std.mem.Allocator) !void {
         .remove => try commands.remove.run(allocator, &args),
         .projects => try commands.projects.run(allocator),
         .quickstart => try commands.quickstart.run(allocator),
+        .migrate => cli.print("Migration complete (or no migration needed).\n", .{}),
         .version => cli.print("tckts {s}\n", .{version}),
         .help => printHelp(),
     }
+}
+
+fn hasForceFlag(args: anytype) bool {
+    // Peek at args to check for --force flag
+    // Note: This consumes the iterator, so we need to reset it or check before consuming
+    while (args.next()) |arg| {
+        if (std.mem.eql(u8, arg, "--force") or std.mem.eql(u8, arg, "-f")) {
+            return true;
+        }
+    }
+    return false;
 }
 
 fn printUsage() void {

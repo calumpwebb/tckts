@@ -102,6 +102,7 @@ pub const Command = enum {
     remove,
     projects,
     quickstart,
+    migrate,
     version,
     help,
 
@@ -120,6 +121,7 @@ pub const Command = enum {
             .{ "remove", Command.remove },
             .{ "projects", Command.projects },
             .{ "quickstart", Command.quickstart },
+            .{ "migrate", Command.migrate },
             .{ "version", Command.version },
             .{ "--version", Command.version },
             .{ "-v", Command.version },
@@ -153,6 +155,7 @@ test "Command: fromString" {
     try testing.expectEqual(Command.remove, Command.fromString("delete").?);
     try testing.expectEqual(Command.projects, Command.fromString("projects").?);
     try testing.expectEqual(Command.quickstart, Command.fromString("quickstart").?);
+    try testing.expectEqual(Command.migrate, Command.fromString("migrate").?);
     try testing.expectEqual(Command.version, Command.fromString("version").?);
     try testing.expectEqual(Command.version, Command.fromString("--version").?);
     try testing.expectEqual(Command.version, Command.fromString("-v").?);

@@ -149,6 +149,11 @@ pub const Status = enum {
     }
 };
 
+pub const HistoryEntry = struct {
+    status: Status,
+    at: []const u8,
+};
+
 pub const TicketId = struct {
     prefix: []const u8,
     number: u32,
@@ -190,11 +195,12 @@ pub const Ticket = struct {
     status: Status,
     title: []const u8,
     created_at: []const u8,
-    started_at: ?[]const u8,
-    completed_at: ?[]const u8,
+    started_at: ?[]const u8, // Deprecated: use history. Kept for v1 compatibility during migration.
+    completed_at: ?[]const u8, // Deprecated: use history. Kept for v1 compatibility during migration.
     depends: []TicketId,
     priority: ?Priority,
     description: []const u8,
+    history: []HistoryEntry,
 
     pub fn deinit(self: *Ticket, allocator: std.mem.Allocator) void {
         allocator.free(self.id.prefix);
@@ -207,6 +213,10 @@ pub const Ticket = struct {
         }
         allocator.free(self.depends);
         allocator.free(self.description);
+        for (self.history) |entry| {
+            allocator.free(entry.at);
+        }
+        allocator.free(self.history);
         self.* = undefined;
     }
 };
@@ -280,6 +290,14 @@ pub const Project = struct {
         const created_at = try formatUtcTimestamp(self.allocator);
         errdefer self.allocator.free(created_at);
 
+        // Create initial history entry
+        const history_at = try self.allocator.dupe(u8, created_at);
+        errdefer self.allocator.free(history_at);
+
+        var history = try self.allocator.alloc(HistoryEntry, 1);
+        errdefer self.allocator.free(history);
+        history[0] = .{ .status = .pending, .at = history_at };
+
         const ticket = Ticket{
             .id = TicketId{ .prefix = prefix_copy, .number = self.next_number },
             .ticket_type = ticket_type,
@@ -291,6 +309,7 @@ pub const Project = struct {
             .depends = depends_copy,
             .priority = priority,
             .description = desc_copy,
+            .history = history,
         };
 
         try self.tickets.append(self.allocator, ticket);
@@ -517,17 +536,23 @@ const JsonHeader = struct {
     version: u32,
 };
 
+const JsonHistoryEntry = struct {
+    status: []const u8,
+    at: []const u8,
+};
+
 const JsonTicket = struct {
     id: []const u8,
     type: []const u8,
     status: []const u8,
     title: []const u8,
     created_at: []const u8,
-    started_at: ?[]const u8 = null,
-    completed_at: ?[]const u8 = null,
+    started_at: ?[]const u8 = null, // v1 field - deprecated
+    completed_at: ?[]const u8 = null, // v1 field - deprecated
     depends: ?[]const []const u8 = null,
     priority: ?[]const u8 = null,
     description: ?[]const u8 = null,
+    history: ?[]const JsonHistoryEntry = null, // v2 field
 };
 
 /// Parse a JSONL file into a Project
@@ -615,6 +640,25 @@ fn parseTicketJson(allocator: std.mem.Allocator, line: []const u8, expected_pref
         allocator.dupe(u8, d) catch return error.OutOfMemory
     else
         allocator.dupe(u8, "") catch return error.OutOfMemory;
+    errdefer allocator.free(description);
+
+    // Parse history (v2 field, empty for v1 tickets)
+    var history: std.ArrayList(HistoryEntry) = .empty;
+    errdefer {
+        for (history.items) |entry| allocator.free(entry.at);
+        history.deinit(allocator);
+    }
+
+    if (jt.history) |h| {
+        for (h) |entry| {
+            const entry_status = Status.fromString(entry.status) orelse return error.InvalidTicket;
+            const at_copy = allocator.dupe(u8, entry.at) catch return error.OutOfMemory;
+            history.append(allocator, .{
+                .status = entry_status,
+                .at = at_copy,
+            }) catch return error.OutOfMemory;
+        }
+    }
 
     return Ticket{
         .id = id,
@@ -627,6 +671,7 @@ fn parseTicketJson(allocator: std.mem.Allocator, line: []const u8, expected_pref
         .depends = depends.toOwnedSlice(allocator) catch return error.OutOfMemory,
         .priority = priority,
         .description = description,
+        .history = history.toOwnedSlice(allocator) catch return error.OutOfMemory,
     };
 }
 
@@ -662,6 +707,11 @@ pub fn serializeProject(allocator: std.mem.Allocator, project: *const Project) !
     return buffer.toOwnedSlice(allocator);
 }
 
+const JsonHistoryEntryOut = struct {
+    status: []const u8,
+    at: []const u8,
+};
+
 fn writeTicketJson(allocator: std.mem.Allocator, writer: anytype, ticket: Ticket, options: json.Stringify.Options) !void {
     // Build depends array as strings
     var depends_strs: ?[][]const u8 = null;
@@ -679,11 +729,27 @@ fn writeTicketJson(allocator: std.mem.Allocator, writer: anytype, ticket: Ticket
         for (ds) |s| allocator.free(s);
     };
 
+    // Build history array for JSON
+    var history_out: ?[]JsonHistoryEntryOut = null;
+    defer if (history_out) |h| allocator.free(h);
+
+    if (ticket.history.len > 0) {
+        var h_list = try allocator.alloc(JsonHistoryEntryOut, ticket.history.len);
+        for (ticket.history, 0..) |entry, i| {
+            h_list[i] = .{
+                .status = entry.status.toString(),
+                .at = entry.at,
+            };
+        }
+        history_out = h_list;
+    }
+
     // Format ticket ID
     const id_str = try fmt.allocPrint(allocator, "{s}-{d}", .{ ticket.id.prefix, ticket.id.number });
     defer allocator.free(id_str);
 
     // Build JSON object with proper field ordering
+    // Note: started_at/completed_at are deprecated but kept for backward compatibility during transition
     const json_ticket = .{
         .id = id_str,
         .type = ticket.ticket_type.toString(),
@@ -695,6 +761,7 @@ fn writeTicketJson(allocator: std.mem.Allocator, writer: anytype, ticket: Ticket
         .depends = depends_strs,
         .priority = if (ticket.priority) |p| p.toString() else null,
         .description = if (ticket.description.len > 0) ticket.description else null,
+        .history = history_out,
     };
 
     const ticket_json = try json.Stringify.valueAlloc(allocator, json_ticket, options);
