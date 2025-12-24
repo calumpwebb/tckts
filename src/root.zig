@@ -12,8 +12,7 @@ const format_version = 1;
 const tckts_dir = ".tckts";
 const file_extension = ".jsonl";
 
-// --- limits ---
-// These limits ensure predictable memory usage and prevent abuse
+// Limits - ensure predictable memory usage and prevent abuse
 
 /// Max title length (single line, ~Twitter length)
 pub const max_title_length_bytes = 280;
@@ -33,8 +32,7 @@ pub const max_dependencies_per_ticket = 100;
 // Internal constants
 const max_line_length_bytes = 4096;
 const timestamp_length_bytes = 20; // "YYYY-MM-DDTHH:MM:SSZ"
-
-// --- helpers ---
+const max_file_size_multiplier = 1000;
 
 /// Format current time as UTC ISO 8601 timestamp (e.g., "2025-12-23T10:30:45Z")
 fn formatUtcTimestamp(allocator: std.mem.Allocator) ![]u8 {
@@ -656,7 +654,7 @@ pub fn loadProject(allocator: std.mem.Allocator, prefix: []const u8) !Project {
     };
     defer file.close();
 
-    const content = try file.readToEndAlloc(allocator, max_description_length_bytes * 1000);
+    const content = try file.readToEndAlloc(allocator, max_description_length_bytes * max_file_size_multiplier);
     defer allocator.free(content);
 
     return parseFile(allocator, content);

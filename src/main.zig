@@ -1,5 +1,7 @@
 const std = @import("std");
+
 const tckts = @import("tckts");
+
 const cli = @import("cli/mod.zig");
 const commands = @import("cli/commands/mod.zig");
 
@@ -9,8 +11,8 @@ const process = std.process;
 
 // TODO(TCKTS-36): Inject from build.zig.zon at compile time. Until then, keep in sync manually.
 const version = "1.1.0";
-
-// --- main ---
+const exit_code_error = 1;
+const exit_code_internal = 2;
 
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
@@ -19,57 +21,57 @@ pub fn main() !void {
 
     run(allocator) catch |err| {
         switch (err) {
-            error.MissingCommand => process.exit(1),
+            error.MissingCommand => process.exit(exit_code_error),
             error.UnknownCommand => {
                 cli.eprint("Error: Unknown command. Run 'tckts help' for usage.\n", .{});
-                process.exit(1);
+                process.exit(exit_code_error);
             },
             error.MissingArgument => {
                 cli.eprint("Error: Missing required argument.\n", .{});
-                process.exit(1);
+                process.exit(exit_code_error);
             },
             error.InvalidArgument => {
                 cli.eprint("Error: Invalid argument.\n", .{});
-                process.exit(1);
+                process.exit(exit_code_error);
             },
             error.ProjectNotInitialized, error.ProjectNotFound => {
-                process.exit(1);
+                process.exit(exit_code_error);
             },
             error.TicketNotFound => {
                 cli.eprint("Error: Ticket not found.\n", .{});
-                process.exit(1);
+                process.exit(exit_code_error);
             },
             error.DependencyNotComplete => {
                 cli.eprint("Error: Cannot complete ticket - dependencies not done.\n", .{});
-                process.exit(1);
+                process.exit(exit_code_error);
             },
             error.ProjectAlreadyExists => {
                 cli.eprint("Error: Project already exists.\n", .{});
-                process.exit(1);
+                process.exit(exit_code_error);
             },
             error.AlreadyDone => {
                 cli.eprint("Error: Ticket is already done.\n", .{});
-                process.exit(1);
+                process.exit(exit_code_error);
             },
             error.TitleTooLong => {
                 cli.eprint("Error: Title too long (max {d} characters).\n", .{tckts.max_title_length_bytes});
-                process.exit(1);
+                process.exit(exit_code_error);
             },
             error.DescriptionTooLong => {
                 cli.eprint("Error: Description too long (max {d} bytes).\n", .{tckts.max_description_length_bytes});
-                process.exit(1);
+                process.exit(exit_code_error);
             },
             error.TooManyTickets => {
                 cli.eprint("Error: Too many tickets in project (max {d}).\n", .{tckts.max_tickets_per_project});
-                process.exit(1);
+                process.exit(exit_code_error);
             },
             error.PrefixTooLong => {
                 cli.eprint("Error: Prefix too long (max {d} characters).\n", .{tckts.max_prefix_length_bytes});
-                process.exit(1);
+                process.exit(exit_code_error);
             },
             else => {
                 cli.eprint("Error: {any}\n", .{err});
-                process.exit(2);
+                process.exit(exit_code_internal);
             },
         }
     };

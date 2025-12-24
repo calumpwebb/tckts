@@ -1,20 +1,26 @@
 const std = @import("std");
+
 const tckts = @import("tckts");
 
 const mem = std.mem;
 
-// --- I/O helpers ---
+// --- constants ---
+
+const stdout_buffer_size_bytes = 8192;
+const stderr_buffer_size_bytes = 4096;
+
+// --- types ---
 
 pub fn print(comptime format: []const u8, args: anytype) void {
     const stdout = std.fs.File.stdout();
-    var buf: [8192]u8 = undefined;
+    var buf: [stdout_buffer_size_bytes]u8 = undefined;
     const msg = std.fmt.bufPrint(&buf, format, args) catch return;
     _ = stdout.write(msg) catch {};
 }
 
 pub fn eprint(comptime format: []const u8, args: anytype) void {
     const stderr = std.fs.File.stderr();
-    var buf: [4096]u8 = undefined;
+    var buf: [stderr_buffer_size_bytes]u8 = undefined;
     const msg = std.fmt.bufPrint(&buf, format, args) catch return;
     _ = stderr.write(msg) catch {};
 }
