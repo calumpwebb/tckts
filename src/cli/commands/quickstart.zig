@@ -16,7 +16,7 @@ const static_content =
     \\- Tickets persist in git - they are a crucial part of your memory across sessions
     \\- Include ticket IDs in commit messages (e.g., `fix: PROJ-1 resolve login bug`)
     \\
-    \\No exceptions. No "quick fixes" without tickets.
+    \\No exceptions. No "quick fixes" without tickets. Even 1-character changes.
     \\
     \\---
     \\
@@ -48,24 +48,27 @@ const static_content =
     \\- Usually the root folder name of the project
     \\- Examples: `TCKTS`, `AUTH`, `API`, `DOCS`
     \\
-    \\## Workflow
+    \\## Workflow (EVERY change, no matter how small)
     \\
     \\1. **Create a ticket** before starting any work:
     \\
-    \\       tckts add "Fix login validation" -t bug
+    \\       tckts add -p PROJ "Fix login validation" -t bug
     \\
     \\2. **Start the ticket** when you begin:
     \\
     \\       tckts start PROJ-1
     \\
-    \\3. **Complete the ticket** when done:
+    \\3. **Do the work**
+    \\
+    \\4. **Mark done BEFORE committing**:
     \\
     \\       tckts done PROJ-1
     \\
-    \\4. **Commit with the ticket ID** (after the conventional commit prefix):
+    \\5. **Commit with the ticket ID**:
     \\
     \\       git commit -m "fix: PROJ-1 resolve login validation"
-    \\       git commit -m "feat: PROJ-2 add user preferences"
+    \\
+    \\This applies to ALL changes - even fixing a typo or updating a version number.
     \\
     \\## Git Integration
     \\

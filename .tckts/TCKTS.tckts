@@ -328,8 +328,19 @@ depends: TCKTS-25
 ---
 id: TCKTS-34
 type: chore
-status: in_progress
+status: done
 title: Add LICENSE file
 created_at: 2025-12-24T03:14:49Z
 started_at: 2025-12-24T03:15:58Z
+completed_at: 2025-12-24T03:16:26Z
+---
+
+---
+id: TCKTS-35
+type: task
+status: done
+title: Update quickstart to emphasize full workflow for every change
+created_at: 2025-12-24T03:19:12Z
+started_at: 2025-12-24T03:19:20Z
+completed_at: 2025-12-24T03:19:20Z
 ---
