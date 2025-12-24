@@ -1,5 +1,6 @@
 const std = @import("std");
 
+const build_options = @import("build_options");
 const tckts = @import("tckts");
 
 const cli = @import("cli/mod.zig");
@@ -9,8 +10,7 @@ const process = std.process;
 
 // --- constants ---
 
-// TODO(TCKTS-36): Inject from build.zig.zon at compile time. Until then, keep in sync manually.
-const version = "1.1.0";
+const version = build_options.version;
 const exit_code_error = 1;
 const exit_code_internal = 2;
 
@@ -38,7 +38,7 @@ pub fn main() !void {
                 process.exit(exit_code_error);
             },
             error.TicketNotFound => {
-                cli.eprint("Error: Ticket not found.\n", .{});
+                // Error message already printed by command handler with specific ticket ID
                 process.exit(exit_code_error);
             },
             error.DependencyNotComplete => {
@@ -50,7 +50,7 @@ pub fn main() !void {
                 process.exit(exit_code_error);
             },
             error.AlreadyDone => {
-                cli.eprint("Error: Ticket is already done.\n", .{});
+                // Error message already printed by command handler with specific ticket ID
                 process.exit(exit_code_error);
             },
             error.TitleTooLong => {
@@ -103,6 +103,7 @@ fn run(allocator: std.mem.Allocator) !void {
         .rm => try commands.rm.run(allocator, &args),
         .projects => try commands.projects.run(allocator),
         .quickstart => try commands.quickstart.run(allocator),
+        .version => cli.print("tckts v{s}\n", .{version}),
         .help => printHelp(),
     }
 }
@@ -123,6 +124,7 @@ fn printUsage() void {
         \\  rm <ID>           Remove a ticket
         \\  projects          List all projects
         \\  quickstart        LLM onboarding guide <- LLMs RUN THIS
+        \\  version           Show version
         \\  help              Show this help
         \\
         \\Run 'tckts help' for detailed usage.
@@ -187,6 +189,9 @@ fn printHelp() void {
         \\
         \\    quickstart
         \\        LLM onboarding guide. <- LLMs RUN THIS
+        \\
+        \\    version
+        \\        Show version information.
         \\
         \\    help
         \\        Show this help message.

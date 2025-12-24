@@ -7,6 +7,8 @@ const std = @import("std");
 // build runner to parallelize the build automatically (and the cache system to
 // know when a step doesn't need to be re-run).
 pub fn build(b: *std.Build) void {
+    // Extract version from build.zig.zon for compile-time injection
+    const version = @import("build.zig.zon").version;
     // Standard target options allow the person running `zig build` to choose
     // what target to build for. Here we do not override the defaults, which
     // means any target is allowed, and the default is native. Other options
@@ -57,6 +59,10 @@ pub fn build(b: *std.Build) void {
     //
     // If neither case applies to you, feel free to delete the declaration you
     // don't need and to put everything under a single module.
+    // Create build options module for compile-time constants
+    const build_options = b.addOptions();
+    build_options.addOption([]const u8, "version", version);
+
     const exe = b.addExecutable(.{
         .name = "tckts",
         .root_module = b.createModule(.{
@@ -74,6 +80,7 @@ pub fn build(b: *std.Build) void {
             // root module.
             .imports = &.{
                 .{ .name = "tckts", .module = mod },
+                .{ .name = "build_options", .module = build_options.createModule() },
             },
         }),
     });

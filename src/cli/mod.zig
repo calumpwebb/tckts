@@ -91,6 +91,7 @@ pub const Command = enum {
     rm,
     projects,
     quickstart,
+    version,
     help,
 
     pub fn fromString(s: []const u8) ?Command {
@@ -108,6 +109,9 @@ pub const Command = enum {
             .{ "remove", Command.rm },
             .{ "projects", Command.projects },
             .{ "quickstart", Command.quickstart },
+            .{ "version", Command.version },
+            .{ "--version", Command.version },
+            .{ "-v", Command.version },
             .{ "help", Command.help },
             .{ "--help", Command.help },
             .{ "-h", Command.help },
@@ -137,6 +141,10 @@ test "Command: fromString" {
     try testing.expectEqual(Command.rm, Command.fromString("rm").?);
     try testing.expectEqual(Command.rm, Command.fromString("delete").?);
     try testing.expectEqual(Command.projects, Command.fromString("projects").?);
+    try testing.expectEqual(Command.quickstart, Command.fromString("quickstart").?);
+    try testing.expectEqual(Command.version, Command.fromString("version").?);
+    try testing.expectEqual(Command.version, Command.fromString("--version").?);
+    try testing.expectEqual(Command.version, Command.fromString("-v").?);
     try testing.expectEqual(Command.help, Command.fromString("help").?);
     try testing.expectEqual(Command.help, Command.fromString("--help").?);
     try testing.expectEqual(@as(?Command, null), Command.fromString("unknown"));

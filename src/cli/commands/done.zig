@@ -11,7 +11,13 @@ pub fn run(allocator: std.mem.Allocator, args: anytype) !void {
     var project = try cli.loadProjectOrError(allocator, ticket_id.prefix);
     defer project.deinit();
 
-    const blocking = try project.canComplete(ticket_id.number);
+    const blocking = project.canComplete(ticket_id.number) catch |err| {
+        if (err == error.TicketNotFound) {
+            cli.eprint("Error: Ticket '{s}-{d}' not found.\n", .{ ticket_id.prefix, ticket_id.number });
+            return error.TicketNotFound;
+        }
+        return err;
+    };
     defer allocator.free(blocking);
 
     if (blocking.len > 0) {
