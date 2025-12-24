@@ -9,9 +9,16 @@ const testing = std.testing;
 // --- constants ---
 
 const format_version = 1;
-const tckts_dir = ".tckts";
 const file_extension = ".jsonl";
 const config_filename = "config.json";
+
+pub const default_tckts_dir = ".tckts";
+pub const tckts_dir_env_var = "TCKTS_DIR";
+
+/// Get the tckts directory - checks TCKTS_DIR env var, falls back to .tckts
+fn getTcktsDirName() []const u8 {
+    return std.posix.getenv(tckts_dir_env_var) orelse default_tckts_dir;
+}
 
 // Limits - ensure predictable memory usage and prevent abuse
 
@@ -387,7 +394,7 @@ pub const ConfigError = error{
 
 /// Load config from .tckts/config.json
 pub fn loadConfig(allocator: std.mem.Allocator) ConfigError!Config {
-    const config_path = fmt.allocPrint(allocator, "{s}/{s}", .{ tckts_dir, config_filename }) catch return error.ConfigNotFound;
+    const config_path = fmt.allocPrint(allocator, "{s}/{s}", .{ getTcktsDirName(), config_filename }) catch return error.ConfigNotFound;
     defer allocator.free(config_path);
 
     const cwd = fs.cwd();
@@ -410,12 +417,13 @@ pub fn loadConfig(allocator: std.mem.Allocator) ConfigError!Config {
 
 /// Save config to .tckts/config.json
 pub fn saveConfig(allocator: std.mem.Allocator, config: *const Config) !void {
+    const tckts_dir = getTcktsDirName();
     const config_path = try fmt.allocPrint(allocator, "{s}/{s}", .{ tckts_dir, config_filename });
     defer allocator.free(config_path);
 
     const cwd = fs.cwd();
 
-    // Ensure .tckts directory exists
+    // Ensure tckts directory exists
     cwd.makeDir(tckts_dir) catch |e| switch (e) {
         error.PathAlreadyExists => {},
         else => return e,
@@ -666,8 +674,9 @@ fn writeTicketJson(allocator: std.mem.Allocator, writer: anytype, ticket: Ticket
     try writer.writeAll(ticket_json);
 }
 
-/// Get the path to the .tckts directory
+/// Get the path to the tckts directory
 pub fn getTcktsDir(allocator: std.mem.Allocator) ![]u8 {
+    const tckts_dir = getTcktsDirName();
     const cwd = fs.cwd();
     return cwd.realpathAlloc(allocator, tckts_dir) catch |e| switch (e) {
         error.FileNotFound => return allocator.dupe(u8, tckts_dir),
@@ -677,14 +686,15 @@ pub fn getTcktsDir(allocator: std.mem.Allocator) ![]u8 {
 
 /// Get the path to a project file
 pub fn getProjectPath(allocator: std.mem.Allocator, prefix: []const u8) ![]u8 {
-    return fmt.allocPrint(allocator, "{s}/{s}{s}", .{ tckts_dir, prefix, file_extension });
+    return fmt.allocPrint(allocator, "{s}/{s}{s}", .{ getTcktsDirName(), prefix, file_extension });
 }
 
 /// Initialize a new project
 pub fn initProject(allocator: std.mem.Allocator, prefix: []const u8) !void {
+    const tckts_dir = getTcktsDirName();
     const cwd = fs.cwd();
 
-    // Create .tckts directory if it doesn't exist
+    // Create tckts directory if it doesn't exist
     cwd.makeDir(tckts_dir) catch |e| switch (e) {
         error.PathAlreadyExists => {},
         else => return e,
@@ -752,7 +762,7 @@ pub fn listProjects(allocator: std.mem.Allocator) ![][]const u8 {
     }
 
     const cwd = fs.cwd();
-    var dir = cwd.openDir(tckts_dir, .{ .iterate = true }) catch |e| switch (e) {
+    var dir = cwd.openDir(getTcktsDirName(), .{ .iterate = true }) catch |e| switch (e) {
         error.FileNotFound => return projects.toOwnedSlice(allocator),
         else => return e,
     };

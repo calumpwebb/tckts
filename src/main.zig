@@ -198,7 +198,11 @@ fn printHelp() void {
         \\
         \\FILES:
         \\    Tickets are stored in .tckts/ directory at the repository root.
-        \\    Each project has its own file: .tckts/BACKEND.tckts
+        \\    Each project has its own file: .tckts/BACKEND.jsonl
+        \\
+        \\ENVIRONMENT:
+        \\    TCKTS_DIR    Override the default ticket storage directory (.tckts/)
+        \\                 Example: TCKTS_DIR=/path/to/tickets tckts list
         \\
         \\EXAMPLES:
         \\    tckts init BACKEND
