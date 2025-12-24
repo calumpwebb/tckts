@@ -10,7 +10,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ```bash
 zig build              # Build the binary (output: zig-out/bin/tckts)
-zig build test         # Run all tests
+zig build test         # Run unit tests
+zig build e2e          # Run e2e tests (requires binary built first)
 zig build run          # Build and run
 zig build run -- <args>  # Run with arguments (e.g., -- add "My ticket")
 zig build -Doptimize=ReleaseFast  # Build optimized release
