@@ -2,6 +2,8 @@ const std = @import("std");
 
 const tckts = @import("tckts");
 
+pub const arg_parser = @import("args.zig");
+
 const mem = std.mem;
 
 // --- constants ---
@@ -162,4 +164,9 @@ test "Command: fromString" {
     try testing.expectEqual(Command.help, Command.fromString("help").?);
     try testing.expectEqual(Command.help, Command.fromString("--help").?);
     try testing.expectEqual(@as(?Command, null), Command.fromString("unknown"));
+}
+
+test {
+    // Include tests from submodules
+    _ = arg_parser;
 }
