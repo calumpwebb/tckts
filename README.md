@@ -27,12 +27,12 @@ To update, run the same command again.
 
 Download the binary for your platform from [GitHub Releases](https://github.com/calumpwebb/tckts/releases):
 
-| Platform | Binary |
-|----------|--------|
+| Platform              | Binary                |
+| --------------------- | --------------------- |
 | macOS (Apple Silicon) | `tckts-macos-aarch64` |
-| macOS (Intel) | `tckts-macos-x86_64` |
-| Linux (x86_64) | `tckts-linux-x86_64` |
-| Linux (ARM64) | `tckts-linux-aarch64` |
+| macOS (Intel)         | `tckts-macos-x86_64`  |
+| Linux (x86_64)        | `tckts-linux-x86_64`  |
+| Linux (ARM64)         | `tckts-linux-aarch64` |
 
 Then make it executable and move to your PATH:
 
@@ -99,6 +99,7 @@ tckts add <title> -p <PREFIX> [options]
 ```
 
 **Options:**
+
 - `-p, --project <PREFIX>` - Project prefix (required)
 - `-t, --type <TYPE>` - Ticket type: bug, feature, task, chore, epic
 - `-d, --depends <IDs>` - Comma-separated dependency IDs
@@ -207,33 +208,36 @@ Tickets are stored in `.tckts/<PREFIX>.tckts` files using [JSON Lines](https://j
 Project metadata is stored separately in `.tckts/config.json`:
 
 ```json
-{"default_project":"MYPROJECT","projects":{"MYPROJECT":{"version":1}}}
+{
+  "default_project": "MYPROJECT",
+  "projects": { "MYPROJECT": { "version": 1 } }
+}
 ```
 
 ### Fields
 
-| Field | Required | Description |
-|-------|----------|-------------|
-| id | Yes | Ticket ID (PREFIX-NUMBER) |
-| type | Yes | bug, feature, task, chore, or epic |
-| status | Yes | pending, in_progress, blocked, or done |
-| title | Yes | Short summary (max 280 chars) |
-| created_at | Yes | UTC timestamp (ISO 8601) |
-| started_at | No | When moved to in_progress |
-| completed_at | No | When marked as done |
-| depends | No | Array of ticket IDs |
-| priority | No | low, medium, or high |
-| description | No | Free-form text description |
+| Field        | Required | Description                            |
+| ------------ | -------- | -------------------------------------- |
+| id           | Yes      | Ticket ID (PREFIX-NUMBER)              |
+| type         | Yes      | bug, feature, task, chore, or epic     |
+| status       | Yes      | pending, in_progress, blocked, or done |
+| title        | Yes      | Short summary (max 280 chars)          |
+| created_at   | Yes      | UTC timestamp (ISO 8601)               |
+| started_at   | No       | When moved to in_progress              |
+| completed_at | No       | When marked as done                    |
+| depends      | No       | Array of ticket IDs                    |
+| priority     | No       | low, medium, or high                   |
+| description  | No       | Free-form text description             |
 
 ### Limits
 
-| Limit | Value |
-|-------|-------|
-| Title length | 280 characters |
-| Description length | 64 KB |
-| Tickets per project | 10,000 |
-| Dependencies per ticket | 100 |
-| Prefix length | 32 characters |
+| Limit                   | Value          |
+| ----------------------- | -------------- |
+| Title length            | 280 characters |
+| Description length      | 64 KB          |
+| Tickets per project     | 10,000         |
+| Dependencies per ticket | 100            |
+| Prefix length           | 32 characters  |
 
 ## Dependencies
 

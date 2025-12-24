@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## First Message Rule
 
-**On the FIRST message of every session—even a single character, empty message, or greeting—you MUST check your available skills using the Skill tool.** This is non-negotiable. Do not respond, ask questions, or take any action until you have checked for applicable skills.
+**On the FIRST message of every session—even a single character, empty message, or greeting—you MUST check your available skills using the Skill tool and you MUST use the `session-start` skill.** This is non-negotiable. Do not respond, ask questions, or take any action until you have checked for and used applicable skills.
 
 ## Build & Test Commands
 
@@ -27,14 +27,17 @@ zig build -Doptimize=ReleaseFast -p /usr/local  # Build and install to /usr/loca
 ### Three-Layer Design
 
 1. **Core Library** (`src/root.zig`) - Data structures, file I/O, project/ticket operations
+
    - `Ticket`, `TicketId`, `Project` structs
    - `parseFile()` / `serializeProject()` for JSONL storage
    - Validation (title max 280 chars, description max 64KB, max 10K tickets)
 
 2. **CLI Layer** (`src/cli/mod.zig`) - Command parsing, I/O helpers, dispatch utilities
+
    - Command enum with aliases (e.g., `ls` → `list`, `complete` → `done`)
 
 3. **Command Handlers** (`src/cli/commands/*.zig`) - One file per command
+
    - Each command has `run(allocator, args, writer)` signature
    - Commands dispatch via `src/cli/commands/mod.zig`
 
@@ -43,18 +46,31 @@ zig build -Doptimize=ReleaseFast -p /usr/local  # Build and install to /usr/loca
 ### Data Storage
 
 Projects stored in `.tckts/PREFIX.tckts` files using [JSON Lines](https://jsonlines.org/) format:
+
 ```jsonl
-{"id":"TODO-1","type":"task","status":"pending","title":"Example ticket","created_at":"2024-12-23T10:30:45Z","priority":"medium","depends":["OTHER-1"]}
+{
+  "id": "TODO-1",
+  "type": "task",
+  "status": "pending",
+  "title": "Example ticket",
+  "created_at": "2024-12-23T10:30:45Z",
+  "priority": "medium",
+  "depends": [
+    "OTHER-1"
+  ]
+}
 ```
 
 Project metadata stored in `.tckts/config.json`:
+
 ```json
-{"default_project":"TODO","projects":{"TODO":{"version":1}}}
+{ "default_project": "TODO", "projects": { "TODO": { "version": 1 } } }
 ```
 
 ## ZLS MCP Server
 
 **Use the ZLS MCP tools for all Zig-related work:**
+
 - `mcp__zls__definition` - Find symbol definitions
 - `mcp__zls__references` - Find all usages of a symbol
 - `mcp__zls__hover` - Get type info and docs

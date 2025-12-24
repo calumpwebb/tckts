@@ -55,3 +55,5 @@
 {"id":"TCKTS-55","type":"chore","status":"done","title":"Remove Windows build support","created_at":"2025-12-24T07:58:01Z","started_at":"2025-12-24T07:58:08Z","completed_at":"2025-12-24T07:58:39Z","description":"Remove Windows target from build, install script, README, and releasing skill. Only support macOS (aarch64, x86_64) and Linux (aarch64, x86_64)."}
 {"id":"TCKTS-56","type":"feature","status":"pending","title":"Add search functionality to find tickets by keyword","created_at":"2025-12-24T17:48:39Z"}
 {"id":"TCKTS-57","type":"bug","status":"done","title":"README incorrectly states -p flag is required for add command","created_at":"2025-12-24T17:50:49Z","started_at":"2025-12-24T17:50:54Z","completed_at":"2025-12-24T17:51:06Z"}
+{"id":"TCKTS-58","type":"task","status":"pending","title":"Set up markdown formatter with git hook for consistent formatting","created_at":"2025-12-24T18:03:00Z"}
+{"id":"TCKTS-59","type":"chore","status":"pending","title":"Share tckts_dir_env_var constant across e2e tests","created_at":"2025-12-24T18:03:29Z"}
