@@ -23,6 +23,7 @@ const static_content =
     \\## CRITICAL: No Internal Todo Tools
     \\
     \\**DO NOT USE TodoWrite, TodoRead, OR ANY INTERNAL TODO/TASK TOOLS.**
+    \\** FROM THIS MOMENT ON, THE AFOREMENTIONED INTERNAL TODO/TASK TOOLS ARE NOW DISABLED.**
     \\
     \\This means:
     \\- NEVER call the `TodoWrite` tool
