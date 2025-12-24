@@ -11,5 +11,4 @@ zig-cache/
 
 # OS
 .DS_Store
-.claude/hooks/
 .claude/settings.local.json
