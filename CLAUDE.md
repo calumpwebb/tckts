@@ -10,7 +10,10 @@ zig build test         # Run all tests
 zig build run          # Build and run
 zig build run -- <args>  # Run with arguments (e.g., -- add "My ticket")
 zig build -Doptimize=ReleaseFast  # Build optimized release
+zig build -Doptimize=ReleaseFast -p /usr/local  # Build and install to /usr/local/bin
 ```
+
+**IMPORTANT:** Bump the version in `src/main.zig` when completing features or releases.
 
 ## Architecture
 

@@ -84,6 +84,7 @@ pub const Command = enum {
     done,
     rm,
     projects,
+    quickstart,
     help,
 
     pub fn fromString(s: []const u8) ?Command {
@@ -100,6 +101,7 @@ pub const Command = enum {
             .{ "delete", Command.rm },
             .{ "remove", Command.rm },
             .{ "projects", Command.projects },
+            .{ "quickstart", Command.quickstart },
             .{ "help", Command.help },
             .{ "--help", Command.help },
             .{ "-h", Command.help },

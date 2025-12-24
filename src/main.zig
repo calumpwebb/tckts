@@ -7,7 +7,7 @@ const process = std.process;
 
 // --- constants ---
 
-const version = "0.1.0";
+const version = "1.0.1";
 
 // --- main ---
 
@@ -99,6 +99,7 @@ fn run(allocator: std.mem.Allocator) !void {
         .done => try commands.done.run(allocator, &args),
         .rm => try commands.rm.run(allocator, &args),
         .projects => try commands.projects.run(allocator),
+        .quickstart => try commands.quickstart.run(allocator),
         .help => printHelp(),
     }
 }
@@ -118,6 +119,7 @@ fn printUsage() void {
         \\  done <ID>         Mark ticket as complete
         \\  rm <ID>           Remove a ticket
         \\  projects          List all projects
+        \\  quickstart        LLM onboarding guide <- LLMs RUN THIS
         \\  help              Show this help
         \\
         \\Run 'tckts help' for detailed usage.
@@ -179,6 +181,9 @@ fn printHelp() void {
         \\
         \\    projects
         \\        List all initialized projects.
+        \\
+        \\    quickstart
+        \\        LLM onboarding guide. <- LLMs RUN THIS
         \\
         \\    help
         \\        Show this help message.
