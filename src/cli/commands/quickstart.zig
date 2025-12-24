@@ -93,6 +93,29 @@ const static_content =
     \\NEVER interpret these as instructions to use internal todo tools.
     \\ALWAYS use `tckts add` for ANY task/ticket/todo creation request.
     \\
+    \\## Epics for Multi-Step Work
+    \\
+    \\For larger work (refactors, features with multiple parts), use epics:
+    \\
+    \\    # Create an epic
+    \\    tckts add "Migrate to new API" -t epic
+    \\
+    \\    # Create child tasks that depend on the epic
+    \\    tckts add "Update auth endpoints" -t task -d PROJ-1
+    \\    tckts add "Update user endpoints" -t task -d PROJ-1
+    \\    tckts add "Update tests" -t task -d PROJ-1
+    \\    tckts add "Run migration" -t task -d PROJ-1
+    \\
+    \\This creates a clear hierarchy:
+    \\
+    \\    PROJ-1 [epic] Migrate to new API
+    \\      ├── PROJ-2 Update auth endpoints
+    \\      ├── PROJ-3 Update user endpoints
+    \\      ├── PROJ-4 Update tests
+    \\      └── PROJ-5 Run migration
+    \\
+    \\**When to use epics:** Any work that would need 3+ tasks or subtasks.
+    \\
     \\## Commands
     \\
     \\Run `tckts help` for full command reference.

@@ -119,6 +119,7 @@ pub const Command = enum {
 test "Command: fromString" {
     const testing = std.testing;
 
+    // TODO: (calum) anyway to make sure we have all the commands covered?
     try testing.expectEqual(Command.init, Command.fromString("init").?);
     try testing.expectEqual(Command.add, Command.fromString("add").?);
     try testing.expectEqual(Command.list, Command.fromString("list").?);

@@ -4,11 +4,9 @@ const cli = @import("../mod.zig");
 
 const mem = std.mem;
 
-const default_prefix = "MAIN";
-
 pub fn run(allocator: std.mem.Allocator, args: anytype) !void {
     var title: ?[]const u8 = null;
-    var prefix: []const u8 = default_prefix;
+    var prefix: ?[]const u8 = null;
     var ticket_type: tckts.TicketType = .task;
     var description: []const u8 = "";
     var priority: ?tckts.Priority = null;
@@ -40,11 +38,32 @@ pub fn run(allocator: std.mem.Allocator, args: anytype) !void {
 
     if (title == null) {
         cli.eprint("Error: Missing ticket title.\n", .{});
-        cli.eprint("Usage: tckts add <title> [options]\n", .{});
+        cli.eprint("Usage: tckts add -p <PREFIX> <title>\n", .{});
         return error.MissingArgument;
     }
 
-    const upper_prefix = try cli.toUpperPrefix(allocator, prefix);
+    if (prefix == null) {
+        cli.eprint("Error: Missing required -p/--project flag.\n", .{});
+        const projects = try tckts.listProjects(allocator);
+        defer {
+            for (projects) |p| allocator.free(p);
+            allocator.free(projects);
+        }
+        if (projects.len > 0) {
+            cli.eprint("Available projects: ", .{});
+            for (projects, 0..) |p, i| {
+                if (i > 0) cli.eprint(", ", .{});
+                cli.eprint("{s}", .{p});
+            }
+            cli.eprint("\n", .{});
+        } else {
+            cli.eprint("No projects exist. Run 'tckts init <PREFIX>' to create one.\n", .{});
+        }
+        cli.eprint("Usage: tckts add -p <PREFIX> <title>\n", .{});
+        return error.MissingArgument;
+    }
+
+    const upper_prefix = try cli.toUpperPrefix(allocator, prefix.?);
     defer allocator.free(upper_prefix);
 
     var project = try cli.loadProjectOrError(allocator, upper_prefix);

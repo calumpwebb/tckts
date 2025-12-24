@@ -143,17 +143,17 @@ fn printHelp() void {
         \\        The prefix becomes part of ticket IDs (e.g., BACKEND-1).
         \\        Example: tckts init BACKEND
         \\
-        \\    add <title> [options]
+        \\    add -p <PREFIX> <title> [options]
         \\        Add a new ticket to a project.
         \\        Options:
-        \\          -p, --project <PREFIX>   Project prefix (default: MAIN)
+        \\          -p, --project <PREFIX>   Project prefix (required)
         \\          -t, --type <TYPE>        Ticket type: bug, feature, task, chore, epic
         \\          -d, --depends <IDs>      Comma-separated dependency IDs
         \\          -m, --message <DESC>     Ticket description
         \\          --priority <LEVEL>       Priority: low, medium, high
         \\        Example: tckts add "Fix login bug" -t bug -p BACKEND
         \\
-        \\    list [PREFIX] [options]
+        \\    list <PREFIX> [options]
         \\        List tickets for a project.
         \\        Options:
         \\          -a, --all       Show all tickets (including completed)

@@ -31,7 +31,7 @@ The binary will be at `zig-out/bin/tckts`.
 # Initialize a new project
 tckts init MYPROJECT
 
-# Add some tickets
+# Add some tickets (note: -p is required)
 tckts add "User authentication" -p MYPROJECT -t feature
 tckts add "Fix crash on startup" -p MYPROJECT -t bug
 tckts add "Write tests" -p MYPROJECT -t task -d MYPROJECT-1
@@ -69,11 +69,11 @@ Creates `.tckts/<PREFIX>.tckts` file.
 Create a new ticket.
 
 ```bash
-tckts add <title> [options]
+tckts add <title> -p <PREFIX> [options]
 ```
 
 **Options:**
-- `-p, --project <PREFIX>` - Project prefix (default: MAIN)
+- `-p, --project <PREFIX>` - Project prefix (required)
 - `-t, --type <TYPE>` - Ticket type: bug, feature, task, chore, epic
 - `-d, --depends <IDs>` - Comma-separated dependency IDs
 - `-m, --message <DESC>` - Ticket description
@@ -150,6 +150,16 @@ List all projects.
 ```bash
 tckts projects
 ```
+
+### quickstart
+
+Show LLM onboarding guide with workflow instructions.
+
+```bash
+tckts quickstart
+```
+
+Outputs a comprehensive guide for LLMs on how to use tckts, including workflow best practices and command examples. Useful for onboarding AI assistants to your project.
 
 ### help
 
@@ -238,7 +248,7 @@ zig build test
 zig build run -- help
 
 # Build with arguments
-zig build run -- add "Test" -t feature
+zig build run -- add "Test" -p MYPROJECT -t feature
 ```
 
 ## License

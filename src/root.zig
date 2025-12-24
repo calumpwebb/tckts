@@ -10,7 +10,6 @@ const testing = std.testing;
 const format_version = 1;
 const tckts_dir = ".tckts";
 const file_extension = ".tckts";
-const default_prefix = "MAIN";
 
 // --- limits ---
 // These limits ensure predictable memory usage and prevent abuse
