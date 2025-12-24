@@ -41,11 +41,27 @@ zig build -Doptimize=ReleaseFast -p /usr/local  # Build and install to /usr/loca
 
 ### Data Storage
 
-Projects stored in `.tckts/PREFIX.jsonl` files using [JSON Lines](https://jsonlines.org/) format:
+Projects stored in `.tckts/PREFIX.tckts` files using [JSON Lines](https://jsonlines.org/) format:
 ```jsonl
-{"prefix":"TODO","version":1}
 {"id":"TODO-1","type":"task","status":"pending","title":"Example ticket","created_at":"2024-12-23T10:30:45Z","priority":"medium","depends":["OTHER-1"]}
 ```
+
+Project metadata stored in `.tckts/config.json`:
+```json
+{"default_project":"TODO","projects":{"TODO":{"version":1}}}
+```
+
+## ZLS MCP Server
+
+**Use the ZLS MCP tools for all Zig-related work:**
+- `mcp__zls__definition` - Find symbol definitions
+- `mcp__zls__references` - Find all usages of a symbol
+- `mcp__zls__hover` - Get type info and docs
+- `mcp__zls__diagnostics` - Get compiler errors for a file
+- `mcp__zls__rename_symbol` - Rename across codebase
+- `mcp__zls__edit_file` - Apply edits with LSP awareness
+
+Prefer these over manual grep/read when navigating Zig code.
 
 ## Zig Code Conventions
 

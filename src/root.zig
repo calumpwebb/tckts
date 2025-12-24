@@ -374,17 +374,30 @@ pub const Project = struct {
     }
 };
 
+pub const ProjectMeta = struct {
+    version: u32,
+};
+
 pub const Config = struct {
     default_project: ?[]const u8,
+    projects: std.StringHashMap(ProjectMeta),
 
     pub fn deinit(self: *Config, allocator: std.mem.Allocator) void {
         if (self.default_project) |p| allocator.free(p);
+        var iter = self.projects.keyIterator();
+        while (iter.next()) |key| allocator.free(key.*);
+        self.projects.deinit();
         self.* = undefined;
     }
 };
 
+const JsonProjectMeta = struct {
+    version: u32 = format_version,
+};
+
 const JsonConfig = struct {
     default_project: ?[]const u8 = null,
+    projects: ?std.json.ArrayHashMap(JsonProjectMeta) = null,
 };
 
 pub const ConfigError = error{
@@ -411,8 +424,23 @@ pub fn loadConfig(allocator: std.mem.Allocator) ConfigError!Config {
         allocator.dupe(u8, p) catch return error.InvalidConfig
     else
         null;
+    errdefer if (default_project) |p| allocator.free(p);
 
-    return Config{ .default_project = default_project };
+    var projects = std.StringHashMap(ProjectMeta).init(allocator);
+    errdefer {
+        var iter = projects.keyIterator();
+        while (iter.next()) |key| allocator.free(key.*);
+        projects.deinit();
+    }
+
+    if (parsed.value.projects) |json_projects| {
+        for (json_projects.map.keys(), json_projects.map.values()) |key, value| {
+            const key_copy = allocator.dupe(u8, key) catch return error.InvalidConfig;
+            projects.put(key_copy, ProjectMeta{ .version = value.version }) catch return error.InvalidConfig;
+        }
+    }
+
+    return Config{ .default_project = default_project, .projects = projects };
 }
 
 /// Save config to .tckts/config.json
@@ -432,9 +460,23 @@ pub fn saveConfig(allocator: std.mem.Allocator, config: *const Config) !void {
     const file = try cwd.createFile(config_path, .{});
     defer file.close();
 
+    // Build projects map for JSON output
+    var json_projects: ?std.json.ArrayHashMap(JsonProjectMeta) = null;
+    defer if (json_projects) |*jp| jp.deinit(allocator);
+
+    if (config.projects.count() > 0) {
+        var map = std.json.ArrayHashMap(JsonProjectMeta){};
+        var iter = config.projects.iterator();
+        while (iter.next()) |entry| {
+            try map.map.put(allocator, entry.key_ptr.*, JsonProjectMeta{ .version = entry.value_ptr.version });
+        }
+        json_projects = map;
+    }
+
     const json_options = json.Stringify.Options{ .emit_null_optional_fields = false };
     const json_content = try json.Stringify.valueAlloc(allocator, JsonConfig{
         .default_project = config.default_project,
+        .projects = json_projects,
     }, json_options);
     defer allocator.free(json_content);
 
@@ -486,23 +528,12 @@ const JsonTicket = struct {
 };
 
 /// Parse a JSONL file into a Project
-/// Format: Line 1 = header JSON, subsequent lines = ticket JSON objects
-pub fn parseFile(allocator: std.mem.Allocator, content: []const u8) ParseError!Project {
-    var lines = mem.splitSequence(u8, content, "\n");
-
-    // Parse header (first line)
-    const header_line = lines.next() orelse return error.InvalidHeader;
-    if (header_line.len == 0) return error.InvalidHeader;
-
-    const header = json.parseFromSlice(JsonHeader, allocator, header_line, .{}) catch {
-        return error.InvalidJson;
-    };
-    defer header.deinit();
-
-    if (header.value.version != format_version) return error.InvalidHeader;
-
-    var project = Project.init(allocator, header.value.prefix) catch return error.OutOfMemory;
+/// Format: Each line is a ticket JSON object (no header line)
+pub fn parseFile(allocator: std.mem.Allocator, prefix: []const u8, content: []const u8) ParseError!Project {
+    var project = Project.init(allocator, prefix) catch return error.OutOfMemory;
     errdefer project.deinit();
+
+    var lines = mem.splitSequence(u8, content, "\n");
 
     // Parse ticket lines
     while (lines.next()) |line| {
@@ -597,19 +628,13 @@ fn parseTicketJson(allocator: std.mem.Allocator, line: []const u8, expected_pref
 }
 
 /// Serialize a Project to JSONL format
-/// Line 1: header, subsequent lines: tickets sorted by created_at
+/// Each line is a ticket, sorted by created_at (no header line)
 pub fn serializeProject(allocator: std.mem.Allocator, project: *const Project) ![]u8 {
     var buffer: std.ArrayList(u8) = .empty;
     errdefer buffer.deinit(allocator);
 
     const writer = buffer.writer(allocator);
-
-    // Write header as JSON
     const json_options = json.Stringify.Options{ .emit_null_optional_fields = false };
-    const header_json = try json.Stringify.valueAlloc(allocator, .{ .prefix = project.prefix, .version = format_version }, json_options);
-    defer allocator.free(header_json);
-    try writer.writeAll(header_json);
-    try writer.writeAll("\n");
 
     // Sort tickets by created_at (ascending) for deterministic output
     const sorted_indices = try allocator.alloc(usize, project.tickets.items.len);
@@ -710,7 +735,21 @@ pub fn initProject(allocator: std.mem.Allocator, prefix: []const u8) !void {
     };
     defer file.close();
 
-    // Write initial content
+    // Add project to config
+    var config = loadConfig(allocator) catch |e| switch (e) {
+        error.ConfigNotFound => Config{
+            .default_project = null,
+            .projects = std.StringHashMap(ProjectMeta).init(allocator),
+        },
+        else => return e,
+    };
+    defer config.deinit(allocator);
+
+    const prefix_copy = try allocator.dupe(u8, prefix);
+    try config.projects.put(prefix_copy, ProjectMeta{ .version = format_version });
+    try saveConfig(allocator, &config);
+
+    // Write initial content (empty file - no tickets yet)
     var project = try Project.init(allocator, prefix);
     defer project.deinit();
 
@@ -735,7 +774,7 @@ pub fn loadProject(allocator: std.mem.Allocator, prefix: []const u8) !Project {
     const content = try file.readToEndAlloc(allocator, max_description_length_bytes * max_file_size_multiplier);
     defer allocator.free(content);
 
-    return parseFile(allocator, content);
+    return parseFile(allocator, prefix, content);
 }
 
 /// Save a project to disk
@@ -886,12 +925,11 @@ test "Project: remove ticket" {
 test "parseFile: valid JSONL file" {
     const allocator = testing.allocator;
     const content =
-        \\{"prefix":"TEST","version":1}
         \\{"id":"TEST-1","type":"feature","status":"done","title":"First ticket","created_at":"2024-12-23T10:30:00Z","description":"This is the description."}
         \\{"id":"TEST-2","type":"bug","status":"pending","title":"Second ticket","created_at":"2024-12-23T10:30:00Z","depends":["TEST-1"],"priority":"high","description":"Another description."}
     ;
 
-    var project = try parseFile(allocator, content);
+    var project = try parseFile(allocator, "TEST", content);
     defer project.deinit();
 
     try testing.expectEqualStrings("TEST", project.prefix);
@@ -929,7 +967,7 @@ test "serializeProject: roundtrip" {
     const serialized = try serializeProject(allocator, &project);
     defer allocator.free(serialized);
 
-    var parsed = try parseFile(allocator, serialized);
+    var parsed = try parseFile(allocator, "ROUND", serialized);
     defer parsed.deinit();
 
     try testing.expectEqualStrings("ROUND", parsed.prefix);
@@ -946,38 +984,13 @@ test "serializeProject: roundtrip" {
     try testing.expectEqual(@as(usize, 1), t2.depends.len);
 }
 
-test "parseFile: invalid header - missing prefix" {
-    const allocator = testing.allocator;
-    const content =
-        \\{"version":1}
-    ;
-    try testing.expectError(error.InvalidJson, parseFile(allocator, content));
-}
-
-test "parseFile: invalid header - missing version" {
-    const allocator = testing.allocator;
-    const content =
-        \\{"prefix":"TEST"}
-    ;
-    try testing.expectError(error.InvalidJson, parseFile(allocator, content));
-}
-
-test "parseFile: invalid header - wrong version" {
-    const allocator = testing.allocator;
-    const content =
-        \\{"prefix":"TEST","version":999}
-    ;
-    try testing.expectError(error.InvalidHeader, parseFile(allocator, content));
-}
-
 test "parseFile: missing required field" {
     const allocator = testing.allocator;
     const content =
-        \\{"prefix":"TEST","version":1}
         \\{"id":"TEST-1","type":"feature","status":"done","created_at":"2024-12-23T10:30:00Z"}
     ;
     // Missing title field - JSON parser will reject
-    try testing.expectError(error.InvalidJson, parseFile(allocator, content));
+    try testing.expectError(error.InvalidJson, parseFile(allocator, "TEST", content));
 }
 
 test "Project: canComplete with no dependencies" {
@@ -1141,10 +1154,10 @@ test "serializeProject: empty project" {
     const serialized = try serializeProject(allocator, &project);
     defer allocator.free(serialized);
 
-    // JSONL header only
-    try testing.expectEqualStrings("{\"prefix\":\"EMPTY\",\"version\":1}\n", serialized);
+    // Empty file - no tickets, no header
+    try testing.expectEqualStrings("", serialized);
 
-    var parsed = try parseFile(allocator, serialized);
+    var parsed = try parseFile(allocator, "EMPTY", serialized);
     defer parsed.deinit();
 
     try testing.expectEqualStrings("EMPTY", parsed.prefix);
@@ -1154,11 +1167,10 @@ test "serializeProject: empty project" {
 test "parseFile: ticket with empty description" {
     const allocator = testing.allocator;
     const content =
-        \\{"prefix":"TEST","version":1}
         \\{"id":"TEST-1","type":"task","status":"pending","title":"No description ticket","created_at":"2024-12-23T10:30:00Z"}
     ;
 
-    var project = try parseFile(allocator, content);
+    var project = try parseFile(allocator, "TEST", content);
     defer project.deinit();
 
     const t = project.findTicket(1).?;
@@ -1168,11 +1180,10 @@ test "parseFile: ticket with empty description" {
 test "parseFile: ticket with multiline description" {
     const allocator = testing.allocator;
     const content =
-        \\{"prefix":"TEST","version":1}
         \\{"id":"TEST-1","type":"feature","status":"pending","title":"Multi-line description","created_at":"2024-12-23T10:30:00Z","description":"Line one.\nLine two.\nLine three."}
     ;
 
-    var project = try parseFile(allocator, content);
+    var project = try parseFile(allocator, "TEST", content);
     defer project.deinit();
 
     const t = project.findTicket(1).?;
@@ -1182,13 +1193,12 @@ test "parseFile: ticket with multiline description" {
 test "parseFile: multiple dependencies" {
     const allocator = testing.allocator;
     const content =
-        \\{"prefix":"TEST","version":1}
         \\{"id":"TEST-1","type":"task","status":"done","title":"First","created_at":"2024-12-23T10:30:00Z"}
         \\{"id":"TEST-2","type":"task","status":"done","title":"Second","created_at":"2024-12-23T10:30:00Z"}
         \\{"id":"TEST-3","type":"task","status":"pending","title":"Third depends on both","created_at":"2024-12-23T10:30:00Z","depends":["TEST-1","TEST-2"]}
     ;
 
-    var project = try parseFile(allocator, content);
+    var project = try parseFile(allocator, "TEST", content);
     defer project.deinit();
 
     const t3 = project.findTicket(3).?;

@@ -144,6 +144,22 @@ pub fn build(b: *std.Build) void {
     test_step.dependOn(&run_mod_tests.step);
     test_step.dependOn(&run_exe_tests.step);
 
+    // E2E tests - run against the actual binary
+    const e2e_mod = b.createModule(.{
+        .root_source_file = b.path("src/e2e_test.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    const e2e_tests = b.addTest(.{
+        .root_module = e2e_mod,
+    });
+    const run_e2e_tests = b.addRunArtifact(e2e_tests);
+    // E2E tests depend on the binary being built
+    run_e2e_tests.step.dependOn(b.getInstallStep());
+
+    const e2e_step = b.step("e2e", "Run e2e tests");
+    e2e_step.dependOn(&run_e2e_tests.step);
+
     // Just like flags, top level steps are also listed in the `--help` menu.
     //
     // The Zig build system is entirely implemented in userland, which means

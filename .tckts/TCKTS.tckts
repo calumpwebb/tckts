@@ -1,4 +1,3 @@
-{"prefix":"TCKTS","version":1}
 {"id":"TCKTS-1","type":"feature","status":"pending","title":"Add pagination support to list command","created_at":"2025-12-24T00:32:06Z","description":"When listing tickets, support --limit and --offset flags to paginate results. Useful for projects with many tickets."}
 {"id":"TCKTS-2","type":"bug","status":"done","title":"Fix duplicate 'not found' error message in show command","created_at":"2025-12-24T00:34:47Z","started_at":"2025-12-24T05:53:27Z","completed_at":"2025-12-24T05:56:43Z","description":"Running 'tckts show TCKTS-2' on a non-existent ticket prints the error twice: 'Error: Ticket not found.' appears two times.\nMight be other issues like this, we should explore commands and check for things like this."}
 {"id":"TCKTS-3","type":"feature","status":"pending","title":"Track ticket state transition history with timestamps","created_at":"2025-12-24T00:38:14Z","description":"Record each status change with timestamp (e.g., pending -> in-progress -> done -> in-progress -> blocked -> done). Enables tracking how long tickets spend in each state and full audit history."}
@@ -43,4 +42,9 @@
 {"id":"TCKTS-42","type":"bug","status":"pending","title":"list command treats --status flag value as project name instead of parsing flag","created_at":"2025-12-24T06:54:53Z"}
 {"id":"TCKTS-43","type":"feature","status":"pending","title":"Allow configurable config file location (not just .tckts/config.json)","created_at":"2025-12-24T07:01:07Z"}
 {"id":"TCKTS-44","type":"feature","status":"done","title":"Allow configurable ticket storage directory (not just .tckts/)","created_at":"2025-12-24T07:01:07Z","started_at":"2025-12-24T07:08:55Z","completed_at":"2025-12-24T07:13:40Z"}
-{"id":"TCKTS-45","type":"task","status":"pending","title":"Add comprehensive e2e tests covering all CLI use cases","created_at":"2025-12-24T07:05:54Z","depends":["TCKTS-44"],"priority":"high"}
+{"id":"TCKTS-45","type":"task","status":"done","title":"Add comprehensive e2e tests covering all CLI use cases","created_at":"2025-12-24T07:05:54Z","started_at":"2025-12-24T07:16:04Z","completed_at":"2025-12-24T07:36:50Z","depends":["TCKTS-44"],"priority":"high"}
+{"id":"TCKTS-46","type":"feature","status":"pending","title":"Add --json output flag to commands for machine-readable output","created_at":"2025-12-24T07:17:17Z"}
+{"id":"TCKTS-47","type":"feature","status":"pending","title":"Replace start/done with edit command - status changes, title/description editing, history log with timestamps, no edits after done","created_at":"2025-12-24T07:23:58Z","priority":"high"}
+{"id":"TCKTS-48","type":"task","status":"pending","title":"Update e2e tests for edit command workflow","created_at":"2025-12-24T07:24:05Z","depends":["TCKTS-47"]}
+{"id":"TCKTS-49","type":"task","status":"done","title":"Move project metadata (prefix, version) from .tckts file header to config.json","created_at":"2025-12-24T07:25:14Z","started_at":"2025-12-24T07:25:20Z","completed_at":"2025-12-24T07:35:33Z"}
+{"id":"TCKTS-50","type":"task","status":"pending","title":"Update e2e tests to use --json output for assertions","created_at":"2025-12-24T07:26:22Z","depends":["TCKTS-46"]}
