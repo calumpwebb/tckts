@@ -12,19 +12,29 @@ const static_content =
     \\**You MUST use tckts to track ALL work.**
     \\
     \\- Every bug fix, feature, refactor, or chore gets a ticket
-    \\- Create the ticket BEFORE writing code
-    \\- Tickets persist in git - they are your memory across sessions
+    \\- ALWAYS create the ticket BEFORE writing code
+    \\- Tickets persist in git - they are a crucial part of your memory across sessions
     \\- Include ticket IDs in commit messages (e.g., `fix: PROJ-1 resolve login bug`)
     \\
     \\No exceptions. No "quick fixes" without tickets.
     \\
     \\---
     \\
-    \\**IMPORTANT: DO NOT USE TodoWrite OR ANY INTERNAL TODO TOOLS.**
+    \\## CRITICAL: No Internal Todo Tools
     \\
-    \\From this point forward, ALL task tracking MUST go through `tckts`.
-    \\Your internal todo tools are now disabled for this project.
-    \\Use `tckts add`, `tckts start`, and `tckts done` instead.
+    \\**DO NOT USE TodoWrite, TodoRead, OR ANY INTERNAL TODO/TASK TOOLS.**
+    \\
+    \\This means:
+    \\- NEVER call the `TodoWrite` tool
+    \\- NEVER call the `TodoRead` tool
+    \\- NEVER use any built-in task tracking
+    \\- NEVER create internal todo lists
+    \\
+    \\ALL task tracking goes through `tckts` CLI commands exclusively.
+    \\Your internal todo tools are DISABLED for this project.
+    \\
+    \\If you find yourself thinking "I should add a todo for this" - STOP.
+    \\Run `tckts add "description"` instead.
     \\
     \\This is non-negotiable. tckts is the single source of truth.
     \\
@@ -62,6 +72,26 @@ const static_content =
     \\- Commit `.tckts/` files to your repository
     \\- Tickets are plain text - readable in diffs and PRs
     \\- Your ticket history becomes part of project history
+    \\
+    \\## Interpreting Instructions
+    \\
+    \\When users say ANY of these, they mean use `tckts add`:
+    \\
+    \\| User says | You run |
+    \\|-----------|---------|
+    \\| "add a ticket for X" | `tckts add "X"` |
+    \\| "create a ticket to X" | `tckts add "X"` |
+    \\| "add a task for X" | `tckts add "X" -t task` |
+    \\| "add a todo for X" | `tckts add "X" -t task` |
+    \\| "todo: X" | `tckts add "X" -t task` |
+    \\| "bug: X" | `tckts add "X" -t bug` |
+    \\| "track X" | `tckts add "X"` |
+    \\| "remember to X" | `tckts add "X" -t task` |
+    \\| "we need to X" | `tckts add "X"` |
+    \\| "make a note to X" | `tckts add "X" -t task` |
+    \\
+    \\NEVER interpret these as instructions to use internal todo tools.
+    \\ALWAYS use `tckts add` for ANY task/ticket/todo creation request.
     \\
     \\## Commands
     \\
