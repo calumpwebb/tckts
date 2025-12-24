@@ -151,21 +151,29 @@ fn printUsage() void {
         \\Usage: tckts <command> [options]
         \\
         \\Commands:
-        \\  init <PREFIX>     Initialize a new project
-        \\  add <title>       Add a new ticket
-        \\  list [PREFIX]     List tickets
-        \\  show <ID>         Show ticket details
-        \\  start <ID>        Mark ticket as in-progress
-        \\  done <ID>         Mark ticket as complete
-        \\  remove <ID>       Remove a ticket
-        \\  projects          List all projects
-        \\  quickstart        LLM onboarding guide <- LLMs RUN THIS
-        \\  version           Show version
-        \\  help              Show this help
-        \\
-        \\Run 'tckts help' for detailed usage.
         \\
     , .{version});
+
+    // Print commands from their metadata
+    printCommandSummary(commands.init.meta);
+    printCommandSummary(commands.add.meta);
+    printCommandSummary(commands.list.meta);
+    printCommandSummary(commands.show.meta);
+    printCommandSummary(commands.start.meta);
+    printCommandSummary(commands.done.meta);
+    printCommandSummary(commands.remove.meta);
+
+    // Commands without meta (no args)
+    cli.print("  {s: <18} {s}\n", .{ "projects", "List all projects" });
+    cli.print("  {s: <18} {s}\n", .{ "quickstart", "LLM onboarding guide" });
+    cli.print("  {s: <18} {s}\n", .{ "version", "Show version" });
+    cli.print("  {s: <18} {s}\n", .{ "help", "Show detailed help" });
+
+    cli.print("\nRun 'tckts <command> -h' for command-specific help.\n", .{});
+}
+
+fn printCommandSummary(meta: cli.arg_parser.CommandMeta) void {
+    cli.print("  {s: <18} {s}\n", .{ meta.usage, meta.short });
 }
 
 fn printHelp() void {
@@ -179,59 +187,32 @@ fn printHelp() void {
         \\    tckts <command> [options]
         \\
         \\COMMANDS:
-        \\    init <PREFIX>
-        \\        Initialize a new project with the given prefix.
-        \\        The prefix becomes part of ticket IDs (e.g., BACKEND-1).
-        \\        Example: tckts init BACKEND
         \\
-        \\    add -p <PREFIX> <title> [options]
-        \\        Add a new ticket to a project.
-        \\        Options:
-        \\          -p, --project <PREFIX>   Project prefix (required)
-        \\          -t, --type <TYPE>        Ticket type: bug, feature, task, chore, epic
-        \\          -d, --depends <IDs>      Comma-separated dependency IDs
-        \\          -m, --message <DESC>     Ticket description
-        \\          --priority <LEVEL>       Priority: low, medium, high
-        \\        Example: tckts add "Fix login bug" -t bug -p BACKEND
-        \\
-        \\    list <PREFIX> [options]
-        \\        List tickets for a project.
-        \\        Options:
-        \\          -a, --all                Show all tickets (including completed)
-        \\          -s, --status <STATUS>    Filter by status (pending, in-progress, blocked, done)
-        \\          --blocked                Show only blocked tickets
-        \\        Example: tckts list BACKEND --status in-progress
-        \\
-        \\    show <ID>
-        \\        Show detailed information about a ticket.
-        \\        Example: tckts show BACKEND-1
-        \\
-        \\    start <ID>
-        \\        Mark a ticket as in-progress.
-        \\        Records the started_at timestamp.
-        \\        Example: tckts start BACKEND-1
-        \\
-        \\    done <ID>
-        \\        Mark a ticket as complete.
-        \\        Fails if the ticket has incomplete dependencies.
-        \\        Example: tckts done BACKEND-1
-        \\
-        \\    remove <ID>
-        \\        Remove a ticket permanently.
-        \\        Example: tckts remove BACKEND-1
-        \\
-        \\    projects
-        \\        List all initialized projects.
-        \\
-        \\    quickstart
-        \\        LLM onboarding guide. <- LLMs RUN THIS
-        \\
-        \\    version
-        \\        Show version information.
-        \\
-        \\    help
-        \\        Show this help message.
-        \\
+    , .{version});
+
+    // Print detailed help from command metadata
+    printCommandHelp(commands.init.meta);
+    printCommandHelp(commands.add.meta);
+    printCommandHelp(commands.list.meta);
+    printCommandHelp(commands.show.meta);
+    printCommandHelp(commands.start.meta);
+    printCommandHelp(commands.done.meta);
+    printCommandHelp(commands.remove.meta);
+
+    // Commands without meta
+    cli.print("    projects\n", .{});
+    cli.print("        List all initialized projects.\n\n", .{});
+
+    cli.print("    quickstart\n", .{});
+    cli.print("        LLM onboarding guide. <- LLMs RUN THIS\n\n", .{});
+
+    cli.print("    version\n", .{});
+    cli.print("        Show version information.\n\n", .{});
+
+    cli.print("    help\n", .{});
+    cli.print("        Show this help message.\n\n", .{});
+
+    cli.print(
         \\FILES:
         \\    Tickets are stored in .tckts/ directory at the repository root.
         \\    Each project has its own file: .tckts/BACKEND.tckts
@@ -240,13 +221,63 @@ fn printHelp() void {
         \\    TCKTS_DIR    Override the default ticket storage directory (.tckts/)
         \\                 Example: TCKTS_DIR=/path/to/tickets tckts list
         \\
-        \\EXAMPLES:
-        \\    tckts init BACKEND
-        \\    tckts add "Set up database" -p BACKEND -t task
-        \\    tckts add "Implement auth" -p BACKEND -t feature -d BACKEND-1
-        \\    tckts list BACKEND
-        \\    tckts start BACKEND-1
-        \\    tckts done BACKEND-1
-        \\
-    , .{version});
+    , .{});
+}
+
+fn printCommandHelp(meta: cli.arg_parser.CommandMeta) void {
+    cli.print("    {s}\n", .{meta.usage});
+    cli.print("        {s}\n", .{meta.short});
+
+    // Print options if any
+    if (meta.options.len > 0) {
+        cli.print("        Options:\n", .{});
+        for (meta.options) |opt| {
+            printOptionHelp(opt);
+        }
+    }
+
+    // Print first example if available
+    if (meta.examples.len > 0) {
+        cli.print("        Example: {s}\n", .{meta.examples[0]});
+    }
+
+    cli.print("\n", .{});
+}
+
+fn printOptionHelp(opt: cli.arg_parser.OptionMeta) void {
+    var buf: [48]u8 = undefined;
+    var len: usize = 0;
+
+    // Build option string: "-p, --project <PREFIX>"
+    if (opt.short) |s| {
+        for (s) |c| {
+            buf[len] = c;
+            len += 1;
+        }
+    }
+
+    if (opt.short != null and opt.long != null) {
+        buf[len] = ',';
+        len += 1;
+        buf[len] = ' ';
+        len += 1;
+    }
+
+    if (opt.long) |l| {
+        for (l) |c| {
+            buf[len] = c;
+            len += 1;
+        }
+    }
+
+    if (opt.arg) |a| {
+        buf[len] = ' ';
+        len += 1;
+        for (a) |c| {
+            buf[len] = c;
+            len += 1;
+        }
+    }
+
+    cli.print("          {s: <24} {s}\n", .{ buf[0..len], opt.desc });
 }
