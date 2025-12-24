@@ -73,27 +73,32 @@ Read all commits since last tag. Write 3-5 user-facing bullet points that summar
 → **AskUserQuestion**: "Release notes look good?" (show the notes)
   - Options: Confirm / Let me edit
 
-### Step 3: Bump Version
+### Step 3: Run Tests
 
-Update version in TWO places:
+Run all tests to verify everything works before releasing:
 
-**build.zig.zon** - find and update the `.version` field:
+```bash
+zig build test && zig build e2e
+```
+
+**If any test fails, stop immediately.** Show the error, do not proceed with the release.
+
+### Step 4: Bump Version
+
+Update version in **build.zig.zon** - find and update the `.version` field:
 ```zig
 .version = "X.Y.Z",
 ```
 
-**src/main.zig** - find and update the version constant:
-```zig
-const version = "X.Y.Z";
-```
+(The version is injected into src/main.zig at compile time via build.zig)
 
 Commit the change:
 ```bash
-git add build.zig.zon src/main.zig
+git add build.zig.zon
 git commit -m "chore: bump version to X.Y.Z"
 ```
 
-### Step 4: Build All Targets
+### Step 5: Build All Targets
 
 Build all 5 platform binaries:
 
@@ -122,7 +127,7 @@ mv zig-out/bin/tckts.exe tckts-windows-x86_64.exe
 
 **If any build fails, stop immediately.** Show the error, do not proceed.
 
-### Step 5: Create Release
+### Step 6: Create Release
 
 → **AskUserQuestion**: "Ready to tag vX.Y.Z, push, and create GitHub release?"
   - Options: Confirm / Abort
@@ -141,7 +146,7 @@ EOF
 )"
 ```
 
-### Step 6: Cleanup
+### Step 7: Cleanup
 
 ```bash
 # Remove local binary files
@@ -162,8 +167,7 @@ Report success with link to the release.
 
 | What | Where |
 |------|-------|
-| Version (zon) | `build.zig.zon` → `.version = "X.Y.Z"` |
-| Version (zig) | `src/main.zig` → `const version = "X.Y.Z"` |
+| Version | `build.zig.zon` → `.version = "X.Y.Z"` (injected into main.zig at compile time) |
 | Install script | `install.sh` (no version, always fetches latest) |
 
 ## Binary Naming Convention

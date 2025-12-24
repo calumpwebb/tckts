@@ -76,7 +76,7 @@ tckts start MYPROJECT-1
 tckts done MYPROJECT-2
 
 # Remove a ticket
-tckts rm MYPROJECT-3
+tckts remove MYPROJECT-3
 ```
 
 ## Commands
@@ -89,7 +89,7 @@ Initialize a new project with a prefix.
 tckts init <PREFIX>
 ```
 
-Creates `.tckts/<PREFIX>.jsonl` file.
+Creates `.tckts/<PREFIX>.tckts` file.
 
 ### add
 
@@ -160,12 +160,12 @@ tckts done <TICKET-ID>
 
 Records the `completed_at` timestamp. If the ticket has incomplete dependencies, you'll see which tickets are blocking it.
 
-### rm
+### remove
 
 Remove a ticket from a project.
 
 ```bash
-tckts rm <TICKET-ID>
+tckts remove <TICKET-ID>
 ```
 
 Removing a ticket also removes it from other tickets' dependency lists.
@@ -198,15 +198,18 @@ tckts help
 
 ## File Format
 
-Tickets are stored in `.tckts/<PREFIX>.jsonl` files using [JSON Lines](https://jsonlines.org/) format - one JSON object per line:
+Tickets are stored in `.tckts/<PREFIX>.tckts` files using [JSON Lines](https://jsonlines.org/) format - one ticket per line:
 
 ```jsonl
-{"prefix":"MYPROJECT","version":1}
 {"id":"MYPROJECT-1","type":"feature","status":"in_progress","title":"User authentication","created_at":"2024-12-23T10:30:45Z","started_at":"2024-12-23T14:00:00Z","priority":"high","description":"Implement OAuth2 login flow with support for Google and GitHub providers."}
 {"id":"MYPROJECT-2","type":"bug","status":"done","title":"Fix crash on startup","created_at":"2024-12-23T10:30:45Z","completed_at":"2024-12-23T16:00:00Z","depends":["MYPROJECT-1"]}
 ```
 
-The first line is the project header. Each subsequent line is a ticket.
+Project metadata is stored separately in `.tckts/config.json`:
+
+```json
+{"default_project":"MYPROJECT","projects":{"MYPROJECT":{"version":1}}}
+```
 
 ### Fields
 
@@ -258,6 +261,16 @@ zig build run -- help
 # Build with arguments
 zig build run -- add "Test" -p MYPROJECT -t feature
 ```
+
+## Releasing
+
+To release a new version, just ask Claude Code:
+
+```
+release a new version
+```
+
+Claude will analyze commits since the last release, bump the version, build all targets, and create a GitHub release with binaries attached.
 
 ## License
 

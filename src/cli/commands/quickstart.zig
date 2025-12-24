@@ -45,9 +45,9 @@ const static_content =
     \\
     \\**You will NEVER read or edit `.tckts/` files directly.**
     \\
-    \\- NEVER use Read tool on `.tckts/*.jsonl` files
-    \\- NEVER use Edit tool on `.tckts/*.jsonl` files
-    \\- NEVER use Write tool on `.tckts/*.jsonl` files
+    \\- NEVER use Read tool on `.tckts/*.tckts` files
+    \\- NEVER use Edit tool on `.tckts/*.tckts` files
+    \\- NEVER use Write tool on `.tckts/*.tckts` files
     \\- NEVER use cat, sed, or any command to view/modify these files
     \\
     \\ALL access to ticket data goes through the `tckts` CLI exclusively.
