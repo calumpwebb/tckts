@@ -107,6 +107,39 @@ pub fn ArgParser(comptime ArgsIterator: type) type {
             self.positionals.deinit(self.allocator);
         }
 
+        /// Result of parseOrExit - whether to continue or return early
+        pub const ParseResult = enum {
+            ok,
+            exit, // User requested help or there was an error (already printed)
+        };
+
+        /// Parse arguments with automatic error handling.
+        /// Returns .exit if command should return (help requested or error printed).
+        /// Returns .ok if parsing succeeded and command should continue.
+        pub fn parseOrExit(self: *Self) ParseResult {
+            self.parse() catch |err| switch (err) {
+                error.HelpRequested => return .exit,
+                error.UnknownFlag => {
+                    const cli = @import("mod.zig");
+                    cli.eprint("Error: Unknown flag '{s}'.\n", .{self.errorArg().?});
+                    cli.eprint("Run 'tckts {s} -h' for usage.\n", .{self.meta.name});
+                    return .exit;
+                },
+                error.MissingFlagValue => {
+                    const cli = @import("mod.zig");
+                    cli.eprint("Error: Flag '{s}' requires a value.\n", .{self.errorArg().?});
+                    cli.eprint("Run 'tckts {s} -h' for usage.\n", .{self.meta.name});
+                    return .exit;
+                },
+                error.OutOfMemory => {
+                    const cli = @import("mod.zig");
+                    cli.eprint("Error: Out of memory.\n", .{});
+                    return .exit;
+                },
+            };
+            return .ok;
+        }
+
         /// Parse all arguments. Returns error.HelpRequested if -h/--help was passed.
         pub fn parse(self: *Self) ParseError!void {
             while (self.args.next()) |argument| {

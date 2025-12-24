@@ -33,20 +33,7 @@ pub fn run(allocator: std.mem.Allocator, args: anytype) !void {
     var parser = arg_parser.ArgParser(@TypeOf(args.*)).init(allocator, args, meta);
     defer parser.deinit();
 
-    parser.parse() catch |err| switch (err) {
-        error.HelpRequested => return,
-        error.UnknownFlag => {
-            cli.eprint("Error: Unknown flag '{s}'.\n", .{parser.errorArg().?});
-            cli.eprint("Run 'tckts add -h' for usage.\n", .{});
-            return error.InvalidArgument;
-        },
-        error.MissingFlagValue => {
-            cli.eprint("Error: Flag '{s}' requires a value.\n", .{parser.errorArg().?});
-            cli.eprint("Run 'tckts add -h' for usage.\n", .{});
-            return error.MissingArgument;
-        },
-        error.OutOfMemory => return error.OutOfMemory,
-    };
+    if (parser.parseOrExit() == .exit) return;
 
     // Get title (first positional)
     const title = parser.positional(0) orelse {

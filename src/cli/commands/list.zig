@@ -3,75 +3,78 @@ const std = @import("std");
 const tckts = @import("tckts");
 
 const cli = @import("../mod.zig");
+const arg_parser = cli.arg_parser;
 
 const mem = std.mem;
 
-pub fn run(allocator: std.mem.Allocator, args: anytype) !void {
-    var prefix: ?[]const u8 = null;
-    var show_all = false;
-    var show_blocked = false;
-    var status_filter: ?tckts.Status = null;
+// --- constants ---
 
-    while (args.next()) |arg| {
-        if (mem.eql(u8, arg, "-a") or mem.eql(u8, arg, "--all")) {
+pub const meta = arg_parser.CommandMeta{
+    .name = "list",
+    .usage = "list [PREFIX] [options]",
+    .short = "List tickets for a project.",
+    .options = &.{
+        .{ .short = "-a", .long = "--all", .desc = "Show all tickets (including completed)" },
+        .{ .short = "-s", .long = "--status", .arg = "<STATUS>", .desc = "Filter by status: pending, in-progress, blocked, done" },
+        .{ .long = "--blocked", .desc = "Show only blocked tickets" },
+    },
+    .examples = &.{
+        "tckts list",
+        "tckts list BACKEND",
+        "tckts list --status in-progress",
+        "tckts list -a",
+    },
+};
+
+// --- types ---
+
+pub fn run(allocator: std.mem.Allocator, args: anytype) !void {
+    var parser = arg_parser.ArgParser(@TypeOf(args.*)).init(allocator, args, meta);
+    defer parser.deinit();
+
+    if (parser.parseOrExit() == .exit) return;
+
+    // Get flags
+    const show_all_flag = parser.flag("all");
+    const show_blocked = parser.flag("blocked");
+    var show_all = show_all_flag;
+
+    // Parse status filter
+    var status_filter: ?tckts.Status = null;
+    if (parser.get("status")) |status_str| {
+        if (mem.eql(u8, status_str, "pending")) {
+            status_filter = .pending;
+        } else if (mem.eql(u8, status_str, "in-progress") or mem.eql(u8, status_str, "in_progress")) {
+            status_filter = .in_progress;
+        } else if (mem.eql(u8, status_str, "blocked")) {
+            status_filter = .blocked;
+        } else if (mem.eql(u8, status_str, "done")) {
+            status_filter = .done;
             show_all = true;
-        } else if (mem.eql(u8, arg, "--blocked")) {
-            show_blocked = true;
-        } else if (mem.eql(u8, arg, "-s") or mem.eql(u8, arg, "--status")) {
-            const status_str = args.next() orelse {
-                cli.eprint("Error: --status requires a value (pending, in-progress, blocked, done)\n", .{});
-                return error.MissingArgument;
-            };
-            if (mem.eql(u8, status_str, "pending")) {
-                status_filter = .pending;
-            } else if (mem.eql(u8, status_str, "in-progress") or mem.eql(u8, status_str, "in_progress")) {
-                status_filter = .in_progress;
-            } else if (mem.eql(u8, status_str, "blocked")) {
-                status_filter = .blocked;
-            } else if (mem.eql(u8, status_str, "done")) {
-                status_filter = .done;
-                show_all = true;
-            } else {
-                cli.eprint("Error: Invalid status '{s}'. Use: pending, in-progress, blocked, done\n", .{status_str});
-                return error.InvalidArgument;
-            }
-        } else if (!mem.startsWith(u8, arg, "-")) {
-            prefix = arg;
+        } else {
+            cli.eprint("Error: Invalid status '{s}'. Use: pending, in-progress, blocked, done\n", .{status_str});
+            return error.InvalidArgument;
         }
     }
 
-    // Try default project from config if not specified
+    // Get project prefix (from positional or default)
     var default_project: ?[]u8 = null;
     defer if (default_project) |dp| allocator.free(dp);
 
-    if (prefix == null) {
+    const prefix = parser.positional(0) orelse blk: {
         default_project = cli.getDefaultProject(allocator);
         if (default_project) |dp| {
-            prefix = dp;
+            break :blk @as([]const u8, dp);
         } else {
             cli.eprint("Error: Missing required project prefix.\n", .{});
-            const projects = try tckts.listProjects(allocator);
-            defer {
-                for (projects) |p| allocator.free(p);
-                allocator.free(projects);
-            }
-            if (projects.len > 0) {
-                cli.eprint("Available projects: ", .{});
-                for (projects, 0..) |p, i| {
-                    if (i > 0) cli.eprint(", ", .{});
-                    cli.eprint("{s}", .{p});
-                }
-                cli.eprint("\n", .{});
-            } else {
-                cli.eprint("No projects exist. Run 'tckts init <PREFIX>' to create one.\n", .{});
-            }
-            cli.eprint("Usage: tckts list <PREFIX>\n", .{});
+            cli.printAvailableProjects(allocator);
+            cli.eprint("Usage: tckts {s}\n", .{meta.usage});
             cli.eprint("Tip: Set a default project in .tckts/config.json\n", .{});
             return error.MissingArgument;
         }
-    }
+    };
 
-    const upper_prefix = try cli.toUpperPrefix(allocator, prefix.?);
+    const upper_prefix = try cli.toUpperPrefix(allocator, prefix);
     defer allocator.free(upper_prefix);
 
     var project = try cli.loadProjectOrError(allocator, upper_prefix);
