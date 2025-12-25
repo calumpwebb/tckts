@@ -234,6 +234,28 @@ pub const Ticket = struct {
         allocator.free(self.description);
         self.description = duped;
     }
+
+    pub fn setStatus(self: *Ticket, allocator: std.mem.Allocator, new_status: Status) !void {
+        self.status = new_status;
+
+        // Append to history
+        const timestamp = try formatUtcTimestamp(allocator);
+        errdefer allocator.free(timestamp);
+
+        const new_len = self.history.len + 1;
+        const new_history = try allocator.alloc(HistoryEntry, new_len);
+        errdefer allocator.free(new_history);
+
+        // Copy existing entries
+        @memcpy(new_history[0..self.history.len], self.history);
+
+        // Add new entry
+        new_history[self.history.len] = .{ .status = new_status, .at = timestamp };
+
+        // Free old history slice and update
+        allocator.free(self.history);
+        self.history = new_history;
+    }
 };
 
 pub const Project = struct {
@@ -1425,4 +1447,63 @@ test "Ticket: setDescription rejects description too long" {
     @memset(long_desc, 'a');
 
     try std.testing.expectError(error.DescriptionTooLong, ticket.setDescription(allocator, long_desc));
+}
+
+test "Ticket: setStatus updates status and appends history" {
+    const allocator = std.testing.allocator;
+    var ticket = Ticket{
+        .id = TicketId{ .prefix = "TEST", .number = 1 },
+        .ticket_type = .task,
+        .status = .pending,
+        .title = "Test",
+        .created_at = "2024-01-01T00:00:00Z",
+        .started_at = null,
+        .completed_at = null,
+        .depends = &[_]TicketId{},
+        .priority = null,
+        .description = "",
+        .history = &[_]HistoryEntry{},
+    };
+    defer {
+        for (ticket.history) |entry| {
+            allocator.free(entry.at);
+        }
+        allocator.free(ticket.history);
+    }
+
+    try ticket.setStatus(allocator, .in_progress);
+
+    try std.testing.expectEqual(Status.in_progress, ticket.status);
+    try std.testing.expectEqual(@as(usize, 1), ticket.history.len);
+    try std.testing.expectEqual(Status.in_progress, ticket.history[0].status);
+}
+
+test "Ticket: setStatus preserves existing history" {
+    const allocator = std.testing.allocator;
+    var ticket = Ticket{
+        .id = TicketId{ .prefix = "TEST", .number = 1 },
+        .ticket_type = .task,
+        .status = .pending,
+        .title = "Test",
+        .created_at = "2024-01-01T00:00:00Z",
+        .started_at = null,
+        .completed_at = null,
+        .depends = &[_]TicketId{},
+        .priority = null,
+        .description = "",
+        .history = &[_]HistoryEntry{},
+    };
+    defer {
+        for (ticket.history) |entry| {
+            allocator.free(entry.at);
+        }
+        allocator.free(ticket.history);
+    }
+
+    try ticket.setStatus(allocator, .in_progress);
+    try ticket.setStatus(allocator, .done);
+
+    try std.testing.expectEqual(@as(usize, 2), ticket.history.len);
+    try std.testing.expectEqual(Status.in_progress, ticket.history[0].status);
+    try std.testing.expectEqual(Status.done, ticket.history[1].status);
 }
