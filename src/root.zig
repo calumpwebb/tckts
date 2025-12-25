@@ -219,6 +219,14 @@ pub const Ticket = struct {
         allocator.free(self.history);
         self.* = undefined;
     }
+
+    pub fn setTitle(self: *Ticket, allocator: std.mem.Allocator, new_title: []const u8) !void {
+        if (new_title.len > max_title_length_bytes) return error.TitleTooLong;
+        if (new_title.len == 0) return error.TitleEmpty;
+        const duped = try allocator.dupe(u8, new_title);
+        allocator.free(self.title);
+        self.title = duped;
+    }
 };
 
 pub const Project = struct {
@@ -544,6 +552,7 @@ pub const FileError = error{
 
 pub const ValidationError = error{
     TitleTooLong,
+    TitleEmpty,
     DescriptionTooLong,
     TooManyTickets,
     TooManyDependencies,
@@ -1293,4 +1302,73 @@ test "parseFile: multiple dependencies" {
 
     const t3 = project.findTicket(3).?;
     try testing.expectEqual(@as(usize, 2), t3.depends.len);
+}
+
+test "Ticket: setTitle updates title" {
+    const allocator = std.testing.allocator;
+    const original_title = try allocator.dupe(u8, "Original title");
+    var ticket = Ticket{
+        .id = TicketId{ .prefix = "TEST", .number = 1 },
+        .ticket_type = .task,
+        .status = .pending,
+        .title = original_title,
+        .created_at = "2024-01-01T00:00:00Z",
+        .started_at = null,
+        .completed_at = null,
+        .depends = &[_]TicketId{},
+        .priority = null,
+        .description = "",
+        .history = &[_]HistoryEntry{},
+    };
+    defer allocator.free(ticket.title);
+
+    try ticket.setTitle(allocator, "New title");
+
+    try std.testing.expectEqualStrings("New title", ticket.title);
+}
+
+test "Ticket: setTitle rejects empty title" {
+    const allocator = std.testing.allocator;
+    const original_title = try allocator.dupe(u8, "Original title");
+    var ticket = Ticket{
+        .id = TicketId{ .prefix = "TEST", .number = 1 },
+        .ticket_type = .task,
+        .status = .pending,
+        .title = original_title,
+        .created_at = "2024-01-01T00:00:00Z",
+        .started_at = null,
+        .completed_at = null,
+        .depends = &[_]TicketId{},
+        .priority = null,
+        .description = "",
+        .history = &[_]HistoryEntry{},
+    };
+    defer allocator.free(ticket.title);
+
+    const result = ticket.setTitle(allocator, "");
+    try std.testing.expectError(error.TitleEmpty, result);
+}
+
+test "Ticket: setTitle rejects title too long" {
+    const allocator = std.testing.allocator;
+    const original_title = try allocator.dupe(u8, "Original title");
+    var ticket = Ticket{
+        .id = TicketId{ .prefix = "TEST", .number = 1 },
+        .ticket_type = .task,
+        .status = .pending,
+        .title = original_title,
+        .created_at = "2024-01-01T00:00:00Z",
+        .started_at = null,
+        .completed_at = null,
+        .depends = &[_]TicketId{},
+        .priority = null,
+        .description = "",
+        .history = &[_]HistoryEntry{},
+    };
+    defer allocator.free(ticket.title);
+
+    // Create a title that's 281 characters (1 over the limit)
+    const long_title = "a" ** 281;
+    const result = ticket.setTitle(allocator, long_title);
+    try std.testing.expectError(error.TitleTooLong, result);
 }
