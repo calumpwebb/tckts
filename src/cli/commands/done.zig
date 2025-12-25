@@ -58,7 +58,7 @@ pub fn run(allocator: std.mem.Allocator, args: anytype) !void {
         return error.DependencyNotComplete;
     }
 
-    try project.markDone(ticket_id.number);
+    try project.updateTicket(ticket_id.number, .{ .status = .done });
     try tckts.saveProject(allocator, &project);
 
     cli.print("Completed {s}-{d}\n", .{ ticket_id.prefix, ticket_id.number });

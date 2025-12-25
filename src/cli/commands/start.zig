@@ -41,7 +41,7 @@ pub fn run(allocator: std.mem.Allocator, args: anytype) !void {
     var project = try cli.loadProjectOrError(allocator, ticket_id.prefix);
     defer project.deinit();
 
-    project.markInProgress(ticket_id.number) catch |err| {
+    project.updateTicket(ticket_id.number, .{ .status = .in_progress }) catch |err| {
         if (err == error.TicketNotFound) {
             cli.eprint("Error: Ticket '{s}-{d}' not found.\n", .{ ticket_id.prefix, ticket_id.number });
             return error.TicketNotFound;
