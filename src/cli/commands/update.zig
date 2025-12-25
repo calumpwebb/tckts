@@ -12,9 +12,9 @@ pub const meta = arg_parser.CommandMeta{
     .usage = "update <ID> [options]",
     .short = "Update a ticket's title, description, or status.",
     .options = &.{
-        .{ .name = "--title", .short = "-t", .description = "Set new title", .takes_value = true },
-        .{ .name = "--description", .short = "-d", .description = "Set new description", .takes_value = true },
-        .{ .name = "--status", .short = "-s", .description = "Set status (pending, in_progress, blocked, done)", .takes_value = true },
+        .{ .short = "-t", .long = "--title", .arg = "<TEXT>", .desc = "Set new title" },
+        .{ .short = "-d", .long = "--description", .arg = "<TEXT>", .desc = "Set new description" },
+        .{ .short = "-s", .long = "--status", .arg = "<STATUS>", .desc = "Set status (pending, in_progress, blocked, done)" },
     },
     .examples = &.{
         "tckts update TODO-1 --status done",
@@ -45,9 +45,9 @@ pub fn run(allocator: std.mem.Allocator, args: anytype) !void {
     defer ticket_id.deinit(allocator);
 
     // Parse options
-    const new_title = parser.option("title");
-    const new_description = parser.option("description");
-    const status_str = parser.option("status");
+    const new_title = parser.get("title");
+    const new_description = parser.get("description");
+    const status_str = parser.get("status");
 
     // At least one option required
     if (new_title == null and new_description == null and status_str == null) {

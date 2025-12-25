@@ -124,6 +124,7 @@ fn run(allocator: std.mem.Allocator) !void {
         .show => try commands.show.run(allocator, &args),
         .start => try commands.start.run(allocator, &args),
         .done => try commands.done.run(allocator, &args),
+        .update => try commands.update.run(allocator, &args),
         .remove => try commands.remove.run(allocator, &args),
         .projects => try commands.projects.run(allocator),
         .quickstart => try commands.quickstart.run(allocator),
@@ -161,6 +162,7 @@ fn printUsage() void {
     printCommandSummary(commands.show.meta);
     printCommandSummary(commands.start.meta);
     printCommandSummary(commands.done.meta);
+    printCommandSummary(commands.update.meta);
     printCommandSummary(commands.remove.meta);
 
     // Commands without meta (no args)
@@ -197,6 +199,7 @@ fn printHelp() void {
     printCommandHelp(commands.show.meta);
     printCommandHelp(commands.start.meta);
     printCommandHelp(commands.done.meta);
+    printCommandHelp(commands.update.meta);
     printCommandHelp(commands.remove.meta);
 
     // Commands without meta
