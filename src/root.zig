@@ -227,6 +227,13 @@ pub const Ticket = struct {
         allocator.free(self.title);
         self.title = duped;
     }
+
+    pub fn setDescription(self: *Ticket, allocator: std.mem.Allocator, new_description: []const u8) !void {
+        if (new_description.len > max_description_length_bytes) return error.DescriptionTooLong;
+        const duped = try allocator.dupe(u8, new_description);
+        allocator.free(self.description);
+        self.description = duped;
+    }
 };
 
 pub const Project = struct {
@@ -1371,4 +1378,51 @@ test "Ticket: setTitle rejects title too long" {
     const long_title = "a" ** 281;
     const result = ticket.setTitle(allocator, long_title);
     try std.testing.expectError(error.TitleTooLong, result);
+}
+
+test "Ticket: setDescription updates description" {
+    const allocator = std.testing.allocator;
+    const original_desc = try allocator.dupe(u8, "Original description");
+    var ticket = Ticket{
+        .id = TicketId{ .prefix = "TEST", .number = 1 },
+        .ticket_type = .task,
+        .status = .pending,
+        .title = "Test",
+        .created_at = "2024-01-01T00:00:00Z",
+        .started_at = null,
+        .completed_at = null,
+        .depends = &[_]TicketId{},
+        .priority = null,
+        .description = original_desc,
+        .history = &[_]HistoryEntry{},
+    };
+    defer allocator.free(ticket.description);
+
+    try ticket.setDescription(allocator, "New description text");
+    try std.testing.expectEqualStrings("New description text", ticket.description);
+}
+
+test "Ticket: setDescription rejects description too long" {
+    const allocator = std.testing.allocator;
+    const original_desc = try allocator.dupe(u8, "");
+    var ticket = Ticket{
+        .id = TicketId{ .prefix = "TEST", .number = 1 },
+        .ticket_type = .task,
+        .status = .pending,
+        .title = "Test",
+        .created_at = "2024-01-01T00:00:00Z",
+        .started_at = null,
+        .completed_at = null,
+        .depends = &[_]TicketId{},
+        .priority = null,
+        .description = original_desc,
+        .history = &[_]HistoryEntry{},
+    };
+    defer allocator.free(ticket.description);
+
+    const long_desc = try allocator.alloc(u8, 64 * 1024 + 1);
+    defer allocator.free(long_desc);
+    @memset(long_desc, 'a');
+
+    try std.testing.expectError(error.DescriptionTooLong, ticket.setDescription(allocator, long_desc));
 }
