@@ -355,3 +355,124 @@ test "e2e: Scenario 4 - ticket removal cleans dependencies" {
         try testing.expect(!contains(result.stdout, "RM-1"));
     }
 }
+
+test "e2e: Scenario 5 - update command" {
+    const allocator = testing.allocator;
+
+    const tckts_dir = try createTempDir(allocator);
+    defer allocator.free(tckts_dir);
+    defer cleanupTempDir(tckts_dir);
+
+    // Setup
+    {
+        const result = try runTckts(allocator, tckts_dir, &.{ "init", "UPD" });
+        defer allocator.free(result.stdout);
+        defer allocator.free(result.stderr);
+        try testing.expectEqual(@as(u8, 0), result.exit_code);
+    }
+
+    // 1. Add ticket
+    {
+        const result = try runTckts(allocator, tckts_dir, &.{ "add", "-p", "UPD", "Original title", "-t", "task" });
+        defer allocator.free(result.stdout);
+        defer allocator.free(result.stderr);
+
+        try testing.expectEqual(@as(u8, 0), result.exit_code);
+        try testing.expect(contains(result.stdout, "UPD-1"));
+    }
+
+    // 2. Update title
+    {
+        const result = try runTckts(allocator, tckts_dir, &.{ "update", "UPD-1", "--title", "Updated title" });
+        defer allocator.free(result.stdout);
+        defer allocator.free(result.stderr);
+
+        try testing.expectEqual(@as(u8, 0), result.exit_code);
+        try testing.expect(contains(result.stdout, "Updated UPD-1"));
+    }
+
+    // 3. Show verifies title change
+    {
+        const result = try runTckts(allocator, tckts_dir, &.{ "show", "UPD-1" });
+        defer allocator.free(result.stdout);
+        defer allocator.free(result.stderr);
+
+        try testing.expectEqual(@as(u8, 0), result.exit_code);
+        try testing.expect(contains(result.stdout, "Updated title"));
+    }
+
+    // 4. Update status to in_progress
+    {
+        const result = try runTckts(allocator, tckts_dir, &.{ "update", "UPD-1", "--status", "in_progress" });
+        defer allocator.free(result.stdout);
+        defer allocator.free(result.stderr);
+
+        try testing.expectEqual(@as(u8, 0), result.exit_code);
+        try testing.expect(contains(result.stdout, "Updated UPD-1 status to in_progress"));
+    }
+
+    // 5. Update status to done
+    {
+        const result = try runTckts(allocator, tckts_dir, &.{ "update", "UPD-1", "--status", "done" });
+        defer allocator.free(result.stdout);
+        defer allocator.free(result.stderr);
+
+        try testing.expectEqual(@as(u8, 0), result.exit_code);
+        try testing.expect(contains(result.stdout, "Updated UPD-1 status to done"));
+    }
+
+    // 6. Verify done in list --all
+    {
+        const result = try runTckts(allocator, tckts_dir, &.{ "list", "UPD", "--all" });
+        defer allocator.free(result.stdout);
+        defer allocator.free(result.stderr);
+
+        try testing.expectEqual(@as(u8, 0), result.exit_code);
+        try testing.expect(contains(result.stdout, "[x]")); // done checkbox
+    }
+
+    // 7. Test alias 'set' works
+    {
+        // Add another ticket
+        const add_result = try runTckts(allocator, tckts_dir, &.{ "add", "-p", "UPD", "Second ticket", "-t", "bug" });
+        defer allocator.free(add_result.stdout);
+        defer allocator.free(add_result.stderr);
+        try testing.expectEqual(@as(u8, 0), add_result.exit_code);
+
+        const result = try runTckts(allocator, tckts_dir, &.{ "set", "UPD-2", "--status", "in_progress" });
+        defer allocator.free(result.stdout);
+        defer allocator.free(result.stderr);
+
+        try testing.expectEqual(@as(u8, 0), result.exit_code);
+        try testing.expect(contains(result.stdout, "Updated UPD-2 status to in_progress"));
+    }
+
+    // 8. Test error: missing ticket ID
+    {
+        const result = try runTckts(allocator, tckts_dir, &.{"update"});
+        defer allocator.free(result.stdout);
+        defer allocator.free(result.stderr);
+
+        try testing.expect(result.exit_code != 0);
+    }
+
+    // 9. Test error: no options provided
+    {
+        const result = try runTckts(allocator, tckts_dir, &.{ "update", "UPD-1" });
+        defer allocator.free(result.stdout);
+        defer allocator.free(result.stderr);
+
+        try testing.expect(result.exit_code != 0);
+        try testing.expect(contains(result.stderr, "At least one"));
+    }
+
+    // 10. Test error: invalid status
+    {
+        const result = try runTckts(allocator, tckts_dir, &.{ "update", "UPD-2", "--status", "invalid" });
+        defer allocator.free(result.stdout);
+        defer allocator.free(result.stderr);
+
+        try testing.expect(result.exit_code != 0);
+        try testing.expect(contains(result.stderr, "Invalid status"));
+    }
+}
