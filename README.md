@@ -160,6 +160,33 @@ tckts done <TICKET-ID>
 
 Records the `completed_at` timestamp. If the ticket has incomplete dependencies, you'll see which tickets are blocking it.
 
+### update
+
+Update a ticket's title, description, or status.
+
+```bash
+tckts update <TICKET-ID> [options]
+```
+
+**Options:**
+
+- `-t, --title <TEXT>` - Set new title
+- `-d, --description <TEXT>` - Set new description
+- `-s, --status <STATUS>` - Set status: pending, in_progress, blocked, done
+
+**Examples:**
+
+```bash
+# Update title
+tckts update API-1 --title "New title"
+
+# Change status
+tckts update API-1 --status in_progress
+
+# Update multiple fields
+tckts update API-1 -t "Updated title" -s done
+```
+
 ### remove
 
 Remove a ticket from a project.

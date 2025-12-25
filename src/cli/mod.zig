@@ -120,7 +120,6 @@ pub const Command = enum {
             .{ "done", Command.done },
             .{ "complete", Command.done },
             .{ "update", Command.update },
-            .{ "edit", Command.update },
             .{ "rm", Command.remove },
             .{ "delete", Command.remove },
             .{ "remove", Command.remove },
@@ -157,7 +156,6 @@ test "Command: fromString" {
     try testing.expectEqual(Command.done, Command.fromString("done").?);
     try testing.expectEqual(Command.done, Command.fromString("complete").?);
     try testing.expectEqual(Command.update, Command.fromString("update").?);
-    try testing.expectEqual(Command.update, Command.fromString("edit").?);
     try testing.expectEqual(Command.remove, Command.fromString("rm").?);
     try testing.expectEqual(Command.remove, Command.fromString("delete").?);
     try testing.expectEqual(Command.projects, Command.fromString("projects").?);

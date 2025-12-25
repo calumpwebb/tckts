@@ -83,6 +83,8 @@ const static_content =
     \\
     \\       tckts done PROJ-1
     \\
+    \\   Or use `tckts update PROJ-1 --status done` to also update title/description.
+    \\
     \\5. **Commit with the ticket ID**:
     \\
     \\       git commit -m "fix: PROJ-1 resolve login validation"
