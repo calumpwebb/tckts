@@ -297,6 +297,12 @@ pub const Project = struct {
         return self.findTicket(id.number);
     }
 
+    pub const UpdateOptions = struct {
+        title: ?[]const u8 = null,
+        description: ?[]const u8 = null,
+        status: ?Status = null,
+    };
+
     pub fn addTicket(self: *Project, ticket_type: TicketType, title: []const u8, description: []const u8, depends: []const TicketId, priority: ?Priority) !*Ticket {
         // Validate limits
         if (title.len > max_title_length_bytes) return error.TitleTooLong;
@@ -434,6 +440,20 @@ pub const Project = struct {
         // Add to history
         const timestamp = try formatUtcTimestamp(self.allocator);
         try self.appendHistory(ticket, .done, timestamp);
+    }
+
+    pub fn updateTicket(self: *Project, ticket_number: u32, options: UpdateOptions) !void {
+        const ticket = self.findTicket(ticket_number) orelse return error.TicketNotFound;
+
+        if (options.title) |new_title| {
+            try ticket.setTitle(self.allocator, new_title);
+        }
+        if (options.description) |new_desc| {
+            try ticket.setDescription(self.allocator, new_desc);
+        }
+        if (options.status) |new_status| {
+            try ticket.setStatus(self.allocator, new_status);
+        }
     }
 
     fn appendHistory(self: *Project, ticket: *Ticket, status: Status, timestamp: []const u8) !void {
@@ -1506,4 +1526,44 @@ test "Ticket: setStatus preserves existing history" {
     try std.testing.expectEqual(@as(usize, 2), ticket.history.len);
     try std.testing.expectEqual(Status.in_progress, ticket.history[0].status);
     try std.testing.expectEqual(Status.done, ticket.history[1].status);
+}
+
+test "Project: updateTicket modifies existing ticket" {
+    const allocator = std.testing.allocator;
+
+    var project = try Project.init(allocator, "TEST");
+    defer project.deinit();
+
+    _ = try project.addTicket(.task, "Original", "", &.{}, null);
+
+    try project.updateTicket(1, .{
+        .title = "Updated title",
+        .status = .in_progress,
+    });
+
+    const ticket = project.findTicket(1).?;
+    try std.testing.expectEqualStrings("Updated title", ticket.title);
+    try std.testing.expectEqual(Status.in_progress, ticket.status);
+    try std.testing.expectEqual(@as(usize, 2), ticket.history.len);
+}
+
+test "Project: updateTicket on nonexistent ticket" {
+    const allocator = std.testing.allocator;
+    var project = try Project.init(allocator, "TEST");
+    defer project.deinit();
+
+    try std.testing.expectError(error.TicketNotFound, project.updateTicket(999, .{ .title = "Test" }));
+}
+
+test "Project: updateTicket can update description" {
+    const allocator = std.testing.allocator;
+    var project = try Project.init(allocator, "TEST");
+    defer project.deinit();
+
+    _ = try project.addTicket(.task, "Title", "", &.{}, null);
+
+    try project.updateTicket(1, .{ .description = "New description" });
+
+    const ticket = project.findTicket(1).?;
+    try std.testing.expectEqualStrings("New description", ticket.description);
 }
