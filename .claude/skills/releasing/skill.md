@@ -29,9 +29,25 @@ Before any analysis, verify basics:
 git status              # Must be clean
 git branch --show-current  # Should be main
 gh auth status          # Must be authenticated
+tckts list --status in-progress  # Must be empty
 ```
 
-If any fail, stop and tell user how to fix.
+**CRITICAL: No in-progress tickets allowed.**
+
+If `tckts list --status in-progress` shows ANY tickets, **STOP immediately**. Do not proceed with the release.
+
+Tell the user:
+> "Cannot release with in-progress tickets. Please resolve these first:
+> [list the tickets]
+>
+> Options:
+> - `tckts done <ID>` - if work is complete
+> - `tckts update <ID> --status pending` - if work is paused
+> - `tckts update <ID> --status blocked` - if work is blocked"
+
+Only proceed once all in-progress tickets are resolved.
+
+If any other check fails, stop and tell user how to fix.
 
 ### Step 2: Analyze Commits
 
