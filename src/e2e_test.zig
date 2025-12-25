@@ -431,7 +431,7 @@ test "e2e: Scenario 5 - update command" {
         try testing.expect(contains(result.stdout, "[x]")); // done checkbox
     }
 
-    // 7. Test alias 'set' works
+    // 7. Test alias 'edit' works
     {
         // Add another ticket
         const add_result = try runTckts(allocator, tckts_dir, &.{ "add", "-p", "UPD", "Second ticket", "-t", "bug" });
@@ -439,7 +439,7 @@ test "e2e: Scenario 5 - update command" {
         defer allocator.free(add_result.stderr);
         try testing.expectEqual(@as(u8, 0), add_result.exit_code);
 
-        const result = try runTckts(allocator, tckts_dir, &.{ "set", "UPD-2", "--status", "in_progress" });
+        const result = try runTckts(allocator, tckts_dir, &.{ "edit", "UPD-2", "--status", "in_progress" });
         defer allocator.free(result.stdout);
         defer allocator.free(result.stderr);
 
